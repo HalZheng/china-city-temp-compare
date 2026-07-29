@@ -17,7 +17,7 @@ interface TempChartProps {
   container: HTMLElement;
 }
 
-export function TempChart({ container }: TempChartProps): { update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[]) => void; saveImage: (cityName: string) => void; destroy: () => void } {
+export function TempChart({ container }: TempChartProps): { update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[], averageLine?: (number | null)[]) => void; saveImage: (cityName: string) => void; destroy: () => void } {
   const wrapper = document.createElement('div');
   wrapper.className = 'chart-wrapper';
   wrapper.style.position = 'relative';
@@ -72,7 +72,14 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
     saveImage(currentCityName);
   });
 
-  function update(data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[]) {
+  function update(
+    data: YearlyData[],
+    tempType: TempType,
+    colors: Record<number, string>,
+    cityName: string,
+    labels: string[],
+    averageLine?: (number | null)[],
+  ) {
     currentCityName = cityName;
     if (chart) {
       chart.destroy();
@@ -80,7 +87,7 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
 
     if (data.length === 0) return;
 
-    const datasets = data.map((yearData) => {
+    const datasets: any[] = data.map((yearData) => {
       const temps = tempType === 'max' ? yearData.maxTemps : yearData.minTemps;
       const color = colors[yearData.year] || '#374151';
       const forecastFlags = yearData.forecastFlags || [];
@@ -110,6 +117,22 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
         },
       };
     });
+
+    // 多年日均虚线（所选年份逐日均值），跟随 tempType
+    if (averageLine && averageLine.length === labels.length) {
+      datasets.push({
+        label: '多年平均',
+        data: averageLine.map((t) => (t !== null ? Number(t.toFixed(1)) : null)),
+        borderColor: '#6b7280',
+        backgroundColor: '#6b7280',
+        borderDash: [6, 5],
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        tension: 0.4,
+        spanGaps: false,
+      });
+    }
 
     chart = new Chart(canvas, {
       type: 'line',

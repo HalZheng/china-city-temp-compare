@@ -7,6 +7,10 @@ import { TempChart } from './components/TempChart';
 import { DataTable } from './components/DataTable';
 import { fetchHistoricalWeather, fetchForecastWeather } from './api/open-meteo';
 import { formatDate, buildMonthDayLabels, isWrappingRange, assignColorsByAverageTemp } from './utils/helpers';
+import { detectHeatwaves, detectColdWaves } from './logic/extremes';
+import { buildSummaryStats, buildYearAverages, multiYearDailyAverage } from './logic/stats';
+import { StatsCards } from './components/StatsCards';
+import { ExtremeCards } from './components/ExtremeCards';
 
 const defaultCity: City = {
   name: '大连',
@@ -107,7 +111,14 @@ function setTempType(type: TempType) {
     maxTab.classList.remove('active');
   }
   if (state.yearlyData.length > 0) {
-    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels);
+    const avgLine = multiYearDailyAverage(state.yearlyData, currentLabels, state.tempType);
+    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine);
+    const heatwaves = detectHeatwaves(state.yearlyData, currentLabels);
+    const coldWaves = detectColdWaves(state.yearlyData, currentLabels);
+    const summary = buildSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
+    const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
+    statsCards.update(summary, yearAverages, state.tempType);
+    extremeCards.update(heatwaves, coldWaves, currentYearColors);
   }
 }
 
@@ -125,6 +136,12 @@ app.appendChild(chartSection);
 
 const chart = TempChart({ container: chartContainer });
 
+// Stats section
+const statsSection = document.createElement('section');
+statsSection.className = 'stats-container';
+app.appendChild(statsSection);
+const statsCards = StatsCards({ container: statsSection });
+
 // Table section
 const tableSection = document.createElement('section');
 tableSection.className = 'table-section';
@@ -137,6 +154,12 @@ tableSection.appendChild(tableContainer);
 app.appendChild(tableSection);
 
 const dataTable = DataTable({ container: tableContainer });
+
+// Extreme events section
+const extremeSection = document.createElement('section');
+extremeSection.className = 'extreme-container';
+app.appendChild(extremeSection);
+const extremeCards = ExtremeCards({ container: extremeSection });
 
 // Footer
 const footer = document.createElement('footer');
@@ -285,6 +308,8 @@ async function handleQuery() {
   if (state.yearlyData.length > 0) {
     chartSection.style.display = 'block';
     tableSection.style.display = 'block';
+    statsSection.style.display = 'block';
+    extremeSection.style.display = 'block';
     currentLabels = buildMonthDayLabels(state.startMonthDay, state.endMonthDay);
 
     const yearAvgTemps = state.yearlyData.map((r) => {
@@ -294,11 +319,21 @@ async function handleQuery() {
     });
     currentYearColors = assignColorsByAverageTemp(yearAvgTemps);
 
-    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels);
+    const heatwaves = detectHeatwaves(state.yearlyData, currentLabels);
+    const coldWaves = detectColdWaves(state.yearlyData, currentLabels);
+    const avgLine = multiYearDailyAverage(state.yearlyData, currentLabels, state.tempType);
+    const summary = buildSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
+    const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
+
+    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine);
     dataTable.update(state.yearlyData, currentLabels);
+    statsCards.update(summary, yearAverages, state.tempType);
+    extremeCards.update(heatwaves, coldWaves, currentYearColors);
   } else {
     chartSection.style.display = 'none';
     tableSection.style.display = 'none';
+    statsSection.style.display = 'none';
+    extremeSection.style.display = 'none';
   }
 
   if (errors.length > 0) {

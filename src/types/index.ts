@@ -42,6 +42,53 @@ export interface YearlyData {
 
 export type TempType = 'max' | 'min';
 
+export type ColdWaveKind = 'coldwave' | 'severe_cold';
+
+/** 一次高温热浪过程（按 MM-DD 对齐，跨年段用 calendar 年标注） */
+export interface HeatwavePeriod {
+  year: number;
+  startMd: string;
+  endMd: string;
+  startDate: string;
+  endDate: string;
+  startDay: number;
+  endDay: number;
+  duration: number;
+  avgMax: number;
+  includesForecast: boolean;
+}
+
+export interface ColdWavePeriod {
+  year: number;
+  kind: ColdWaveKind;
+  startMd: string;
+  endMd: string;
+  startDate: string;
+  endDate: string;
+  startDay: number;
+  endDay: number;
+  duration: number;
+  avgMin: number;
+  includesForecast: boolean;
+}
+
+export interface SummaryStats {
+  /** 区间平均气温（跟随 tempType，跨所有年份有效值） */
+  periodAvg: number | null;
+  hotDays: number;
+  tropicalNights: number;
+  heatwaveCount: number;
+  freezingDays: number;
+  extremeColdNights: number;
+  coldWaveCount: number;
+  severeColdCount: number;
+}
+
+export interface YearAverage {
+  year: number;
+  average: number | null;
+}
+
 export interface AppState {
   city: City;
   startMonthDay: string;
