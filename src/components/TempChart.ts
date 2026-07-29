@@ -8,6 +8,9 @@ import {
   Tooltip,
   Legend,
   Title,
+  type ChartConfiguration,
+  type TooltipItem,
+  type LegendItem,
 } from 'chart.js';
 import type { YearlyData, TempType } from '../types';
 
@@ -57,6 +60,7 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
 
   let chart: Chart | null = null;
   let currentCityName = '';
+  const hiddenDatasets = new Set<number>();
 
   function saveImage(cityName: string) {
     if (!chart) return;
@@ -72,21 +76,13 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
     saveImage(currentCityName);
   });
 
-  function update(
+  function buildDatasets(
     data: YearlyData[],
     tempType: TempType,
     colors: Record<number, string>,
-    cityName: string,
     labels: string[],
     averageLine?: (number | null)[],
-  ) {
-    currentCityName = cityName;
-    if (chart) {
-      chart.destroy();
-    }
-
-    if (data.length === 0) return;
-
+  ): any[] {
     const datasets: any[] = data.map((yearData) => {
       const temps = tempType === 'max' ? yearData.maxTemps : yearData.minTemps;
       const color = colors[yearData.year] || '#374151';
@@ -118,7 +114,6 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
       };
     });
 
-    // 多年日均虚线（所选年份逐日均值），跟随 tempType
     if (averageLine && averageLine.length === labels.length) {
       datasets.push({
         label: '多年平均',
@@ -134,7 +129,30 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
       });
     }
 
-    chart = new Chart(canvas, {
+    return datasets;
+  }
+
+  function applyHiddenState(datasets: any[]) {
+    const validIndices = new Set(datasets.map((_, i) => i));
+    for (const idx of Array.from(hiddenDatasets)) {
+      if (!validIndices.has(idx)) {
+        hiddenDatasets.delete(idx);
+      }
+    }
+    datasets.forEach((_, i) => {
+      if (hiddenDatasets.has(i)) {
+        datasets[i].hidden = true;
+      }
+    });
+  }
+
+  function createChartOptions(
+    cityName: string,
+    tempType: TempType,
+    labels: string[],
+    datasets: any[],
+  ): ChartConfiguration<'line'> {
+    return {
       type: 'line',
       data: {
         labels,
@@ -150,6 +168,18 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
         plugins: {
           legend: {
             position: 'top',
+            onClick: (_evt: unknown, legendItem: LegendItem, legend: any) => {
+              const index = legendItem.datasetIndex;
+              if (index === undefined) return;
+              const ci = legend.chart;
+              if (ci.isDatasetVisible(index)) {
+                ci.hide(index);
+                hiddenDatasets.add(index);
+              } else {
+                ci.show(index);
+                hiddenDatasets.delete(index);
+              }
+            },
             labels: {
               usePointStyle: true,
               pointStyle: 'circle',
@@ -180,10 +210,10 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
             padding: 10,
             cornerRadius: 8,
             callbacks: {
-              title: (items) => {
+              title: (items: TooltipItem<'line'>[]) => {
                 return items[0]?.label || '';
               },
-              label: (item) => {
+              label: (item: TooltipItem<'line'>) => {
                 const val = item.parsed.y;
                 return `${item.dataset.label}: ${val !== null ? val + '℃' : '无数据'}`;
               },
@@ -223,7 +253,34 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
           },
         },
       },
-    });
+    };
+  }
+
+  function update(
+    data: YearlyData[],
+    tempType: TempType,
+    colors: Record<number, string>,
+    cityName: string,
+    labels: string[],
+    averageLine?: (number | null)[],
+  ) {
+    currentCityName = cityName;
+
+    if (data.length === 0) return;
+
+    const datasets = buildDatasets(data, tempType, colors, labels, averageLine);
+    applyHiddenState(datasets);
+
+    if (chart) {
+      chart.data.labels = labels;
+      chart.data.datasets = datasets;
+      chart.options.plugins!.title!.text = `${cityName} · ${tempType === 'max' ? '最高气温对比' : '最低气温对比'}`;
+      chart.update('none');
+    } else {
+      const config = createChartOptions(cityName, tempType, labels, datasets);
+      chart = new Chart(canvas, config);
+      (canvas as any).__chartjs_instance__ = chart;
+    }
   }
 
   function destroy() {
