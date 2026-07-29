@@ -36,10 +36,14 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): HTMLElement
     const endMonthDay = getMonthDayFromDate(end);
 
     if (!validateMonthDayRange(startMonthDay, endMonthDay)) {
-      errorMsg.textContent = '起始月日不能晚于结束月日';
-      return;
+      // 跨年区间（如 12-01 至 02-28）是合法的，表示"起始年→次年"
+      errorMsg.textContent = '已选择跨年区间：将对比每年该时段（起始年→次年）';
+      errorMsg.classList.remove('date-error-invalid');
+      errorMsg.classList.add('date-error-info');
+    } else {
+      errorMsg.textContent = '';
+      errorMsg.classList.remove('date-error-info', 'date-error-invalid');
     }
-    errorMsg.textContent = '';
     onChange(startMonthDay, endMonthDay);
   }
 

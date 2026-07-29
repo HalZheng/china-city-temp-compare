@@ -6,7 +6,7 @@ import { YearSelector } from './components/YearSelector';
 import { TempChart } from './components/TempChart';
 import { DataTable } from './components/DataTable';
 import { fetchHistoricalWeather, fetchForecastWeather } from './api/open-meteo';
-import { buildDateForYear, formatDate, filterDateRange, assignColorsByAverageTemp } from './utils/helpers';
+import { formatDate, buildMonthDayLabels, isWrappingRange, assignColorsByAverageTemp } from './utils/helpers';
 
 const defaultCity: City = {
   name: '大连',
@@ -25,6 +25,7 @@ const state: AppState = {
 };
 
 let currentYearColors: Record<number, string> = {};
+let currentLabels: string[] = [];
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = '';
@@ -106,7 +107,7 @@ function setTempType(type: TempType) {
     maxTab.classList.remove('active');
   }
   if (state.yearlyData.length > 0) {
-    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name);
+    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels);
   }
 }
 
@@ -143,6 +144,101 @@ footer.className = 'app-footer';
 footer.innerHTML = '<p>数据来源: <a href="https://open-meteo.com/" target="_blank">Open-Meteo</a></p>';
 app.appendChild(footer);
 
+// 错误/提示横幅
+const messageEl = document.createElement('div');
+messageEl.className = 'message-banner';
+messageEl.style.display = 'none';
+app.appendChild(messageEl);
+
+function showMessage(text: string, type: 'error' | 'info' = 'error') {
+  messageEl.textContent = text;
+  messageEl.className = `message-banner message-${type}`;
+  messageEl.style.display = 'block';
+}
+
+function hideMessage() {
+  messageEl.style.display = 'none';
+}
+
+const mdOf = (dateStr: string) => dateStr.substring(5);
+
+/**
+ * 获取某一年的气温数据并标准化为"月日对齐"的结构。
+ * - 跨年区间拆为"起始年段"与"次年段"分别取数；
+ * - 当年区间按"今天"拆分为历史段(archive)与未来段(forecast)，避免整段走 forecast 导致历史数据丢失；
+ * - 最终按统一的月日标签对齐，闰年差异自然表现为 null。
+ */
+async function fetchYearData(
+  city: City,
+  year: number,
+  startMonthDay: string,
+  endMonthDay: string,
+  todayStr: string,
+): Promise<YearlyData> {
+  const wrap = isWrappingRange(startMonthDay, endMonthDay);
+  const segments: [string, string][] = [];
+  if (!wrap) {
+    segments.push([`${year}-${startMonthDay}`, `${year}-${endMonthDay}`]);
+  } else {
+    segments.push([`${year}-${startMonthDay}`, `${year}-12-31`]);
+    segments.push([`${year + 1}-01-01`, `${year + 1}-${endMonthDay}`]);
+  }
+
+  const byMD = new Map<string, { max: number | null; min: number | null }>();
+  const forecastMD = new Set<string>();
+  // 预报接口仅覆盖约未来 15 天（实测 ≥16 天返回 HTTP 400），超出部分无数据
+  const HORIZON_DAYS = 15;
+  const tomorrow = new Date(`${todayStr}T00:00:00`);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = formatDate(tomorrow);
+  const horizon = new Date(`${todayStr}T00:00:00`);
+  horizon.setDate(horizon.getDate() + HORIZON_DAYS);
+  const horizonStr = formatDate(horizon);
+
+  let truncated = false;
+
+  for (const [segStart, segEnd] of segments) {
+    // 历史段：<= 今天，使用 archive 接口（含完整历史）
+    const pastEnd = segEnd < todayStr ? segEnd : todayStr;
+    if (segStart <= pastEnd) {
+      const resp = await fetchHistoricalWeather(city, segStart, pastEnd);
+      resp.daily.time.forEach((t, i) => {
+        byMD.set(mdOf(t), {
+          max: resp.daily.temperature_2m_max[i],
+          min: resp.daily.temperature_2m_min[i],
+        });
+      });
+    }
+    // 未来段：> 今天，使用 forecast 接口。
+    // 将请求结束日收敛到 horizon 内（必成功），超出 horizon 的日期无数据(null)；
+    // 即便接口仍报错（限流等），也只跳过未来段、保留已取到的历史段，避免整年数据丢失。
+    const futStart = segStart > tomorrowStr ? segStart : tomorrowStr;
+    const futEnd = segEnd < horizonStr ? segEnd : horizonStr;
+    if (futStart <= futEnd) {
+      try {
+        const resp = await fetchForecastWeather(city, futStart, futEnd);
+        resp.daily.time.forEach((t, i) => {
+          byMD.set(mdOf(t), {
+            max: resp.daily.temperature_2m_max[i],
+            min: resp.daily.temperature_2m_min[i],
+          });
+          forecastMD.add(mdOf(t));
+        });
+      } catch {
+        // 预报接口失败：保留历史段，未来段置为 null
+      }
+    }
+    if (segEnd > horizonStr) truncated = true;
+  }
+
+  const labels = buildMonthDayLabels(startMonthDay, endMonthDay);
+  const maxTemps = labels.map((md) => (byMD.has(md) ? byMD.get(md)!.max : null));
+  const minTemps = labels.map((md) => (byMD.has(md) ? byMD.get(md)!.min : null));
+  const forecastFlags = labels.map((md) => forecastMD.has(md));
+
+  return { year, dates: labels, maxTemps, minTemps, forecastFlags, truncated };
+}
+
 // Query handler
 async function handleQuery() {
   if (state.selectedYears.length === 0) {
@@ -156,53 +252,23 @@ async function handleQuery() {
 
   state.loading = true;
   loadingEl.style.display = 'block';
+  hideMessage();
   chartSection.style.display = 'none';
   tableSection.style.display = 'none';
   state.yearlyData = [];
 
   const todayStr = formatDate(new Date());
-  const currentYear = new Date().getFullYear();
 
   const promises = state.selectedYears.map(async (year) => {
-    const startDate = buildDateForYear(state.startMonthDay, year);
-    const endDate = buildDateForYear(state.endMonthDay, year);
     try {
-      let response;
-      let forecastIndices: Set<number> | undefined;
-      if (year === currentYear && endDate > todayStr) {
-        const raw = await fetchForecastWeather(state.city, startDate, endDate);
-        response = filterDateRange(raw, startDate, endDate);
-        forecastIndices = new Set<number>();
-        response.daily.time.forEach((t, i) => {
-          if (t > todayStr) {
-            forecastIndices!.add(i);
-          }
-        });
-      } else {
-        response = await fetchHistoricalWeather(state.city, startDate, endDate);
-      }
-      return {
-        year,
-        dates: response.daily.time,
-        maxTemps: response.daily.temperature_2m_max,
-        minTemps: response.daily.temperature_2m_min,
-        forecastIndices,
-      } as YearlyData;
+      return await fetchYearData(state.city, year, state.startMonthDay, state.endMonthDay, todayStr);
     } catch (error) {
-      if (year === currentYear) {
-        console.warn(`${year}年数据获取失败，将显示为空折线:`, error);
-        return {
-          year,
-          dates: [],
-          maxTemps: [],
-          minTemps: [],
-        } as YearlyData;
-      }
       return {
         year,
         dates: [],
         maxTemps: [],
         minTemps: [],
+        forecastFlags: [],
         error: error instanceof Error ? error.message : '请求失败',
       } as YearlyData;
     }
@@ -211,6 +277,7 @@ async function handleQuery() {
   const results = await Promise.all(promises);
   state.yearlyData = results.filter((r) => !r.error);
   const errors = results.filter((r) => r.error);
+  const truncatedYears = results.filter((r) => r.truncated && !r.error).map((r) => r.year);
 
   state.loading = false;
   loadingEl.style.display = 'none';
@@ -218,6 +285,7 @@ async function handleQuery() {
   if (state.yearlyData.length > 0) {
     chartSection.style.display = 'block';
     tableSection.style.display = 'block';
+    currentLabels = buildMonthDayLabels(state.startMonthDay, state.endMonthDay);
 
     const yearAvgTemps = state.yearlyData.map((r) => {
       const validMax = r.maxTemps.filter((t): t is number => t !== null);
@@ -226,13 +294,21 @@ async function handleQuery() {
     });
     currentYearColors = assignColorsByAverageTemp(yearAvgTemps);
 
-    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name);
-    dataTable.update(state.yearlyData);
+    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels);
+    dataTable.update(state.yearlyData, currentLabels);
+  } else {
+    chartSection.style.display = 'none';
+    tableSection.style.display = 'none';
   }
 
   if (errors.length > 0) {
-    const errorMsg = errors.map((e) => `${e.year}年: ${e.error}`).join('\n');
-    console.error(errorMsg);
+    const errorMsg = errors.map((e) => `${e.year}年：${e.error}`).join('；');
+    showMessage(`以下年份数据获取失败：${errorMsg}`, 'error');
+  } else if (truncatedYears.length > 0) {
+    showMessage(
+      `提示：${truncatedYears.join('、')}年 所请求的未来日期超出 Open-Meteo 预报上限（约 15 天），超出部分无数据、已按可获取范围部分显示。`,
+      'info',
+    );
   }
 }
 

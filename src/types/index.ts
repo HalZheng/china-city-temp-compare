@@ -29,11 +29,15 @@ export interface HistoricalWeatherResponse {
 
 export interface YearlyData {
   year: number;
+  /** 与 labels 对齐的月日标签序列（所有年份共用同一序列） */
   dates: string[];
   maxTemps: (number | null)[];
   minTemps: (number | null)[];
+  /** 与 dates 对齐，true 表示该天为预报（未来）数据 */
+  forecastFlags: boolean[];
+  /** true 表示所请求的未来日期超出预报接口上限，超出部分无数据 */
+  truncated?: boolean;
   error?: string;
-  forecastIndices?: Set<number>;
 }
 
 export type TempType = 'max' | 'min';

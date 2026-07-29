@@ -1,18 +1,24 @@
 import type { YearlyData } from '../types';
-import { formatMonthDay, getTemperatureColor } from '../utils/helpers';
+import { getTemperatureColor } from '../utils/helpers';
 
 interface DataTableProps {
   container: HTMLElement;
 }
 
-export function DataTable({ container }: DataTableProps): { update: (data: YearlyData[]) => void; clear: () => void } {
+export function DataTable({ container }: DataTableProps): { update: (data: YearlyData[], labels: string[]) => void; clear: () => void } {
   const wrapper = document.createElement('div');
   wrapper.className = 'data-table-wrapper';
   container.appendChild(wrapper);
 
-  function update(data: YearlyData[]) {
+  function update(data: YearlyData[], labels: string[]) {
     wrapper.innerHTML = '';
     if (data.length === 0) return;
+
+    // 跨年分界：标签由 12-xx 过渡到 01-xx 的位置
+    const splitIndex = labels.findIndex(
+      (md, i) => i > 0 && labels[i - 1].startsWith('12-') && md.startsWith('01-'),
+    );
+    const colCount = 1 + data.length;
 
     const table = document.createElement('table');
     table.className = 'data-table';
@@ -32,14 +38,23 @@ export function DataTable({ container }: DataTableProps): { update: (data: Yearl
     thead.appendChild(headerRow);
 
     const tbody = document.createElement('tbody');
-    const baseData = data.find((d) => d.dates.length > 0) || data[0];
-    const rowCount = baseData.dates.length;
 
-    for (let i = 0; i < rowCount; i++) {
+    for (let i = 0; i < labels.length; i++) {
+      // 跨年时在年份边界插入分隔行，避免误以为下方都属列名年份
+      if (splitIndex >= 0 && i === splitIndex) {
+        const divider = document.createElement('tr');
+        divider.className = 'year-divider';
+        const td = document.createElement('td');
+        td.colSpan = colCount;
+        td.textContent = '— 以下为次年 1–2 月（所选年份的冬季跨年段） —';
+        divider.appendChild(td);
+        tbody.appendChild(divider);
+      }
+
       const tr = document.createElement('tr');
 
       const dateTd = document.createElement('td');
-      dateTd.textContent = formatMonthDay(baseData.dates[i]);
+      dateTd.textContent = labels[i];
       tr.appendChild(dateTd);
 
       data.forEach((yearData) => {

@@ -12,16 +12,6 @@ export function formatMonthDay(dateStr: string): string {
   return dateStr.substring(5);
 }
 
-export function generateYearColors(years: number[]): Record<number, string> {
-  const colors: Record<number, string> = {};
-  const hueStep = 360 / Math.max(years.length, 1);
-  years.forEach((year, index) => {
-    const hue = (index * hueStep) % 360;
-    colors[year] = `hsl(${hue}, 70%, 50%)`;
-  });
-  return colors;
-}
-
 export function validateMonthDayRange(start: string, end: string): boolean {
   return start <= end;
 }
@@ -46,8 +36,33 @@ export function getMonthDayFromDate(dateStr: string): string {
   return dateStr.substring(5);
 }
 
-export function buildDateForYear(monthDay: string, year: number): string {
-  return `${year}-${monthDay}`;
+/** 月日区间是否跨年（如 12-01 > 02-28） */
+export function isWrappingRange(startMonthDay: string, endMonthDay: string): boolean {
+  return startMonthDay > endMonthDay;
+}
+
+/**
+ * 生成区间内统一的月日(MM-DD)标签序列，作为所有年份对齐的 X 轴。
+ * 使用闰年参考年(2000)生成，确保区间内包含 02-29 时标签也包含它；
+ * 非闰年年份对应 02-29 的数据自然为 null，从而实现正确对齐。
+ */
+export function buildMonthDayLabels(startMonthDay: string, endMonthDay: string): string[] {
+  const mdOf = (dateStr: string) => dateStr.substring(5);
+  const labels: string[] = [];
+  const pushRange = (from: Date, to: Date) => {
+    const cur = new Date(from);
+    while (cur <= to) {
+      labels.push(mdOf(formatDate(cur)));
+      cur.setDate(cur.getDate() + 1);
+    }
+  };
+  if (!isWrappingRange(startMonthDay, endMonthDay)) {
+    pushRange(new Date(`2000-${startMonthDay}`), new Date(`2000-${endMonthDay}`));
+  } else {
+    pushRange(new Date(`2000-${startMonthDay}`), new Date(`2000-12-31`));
+    pushRange(new Date(`2001-01-01`), new Date(`2001-${endMonthDay}`));
+  }
+  return labels;
 }
 
 const TEMP_PALETTE = [
@@ -80,20 +95,4 @@ export function getTemperatureColor(temp: number): string | null {
   if (temp >= 35) return '#dc2626';
   if (temp >= 30) return '#ea580c';
   return null;
-}
-
-export function filterDateRange(response: { daily: { time: string[]; temperature_2m_max: (number | null)[]; temperature_2m_min: (number | null)[] } }, startDate: string, endDate: string): { daily: { time: string[]; temperature_2m_max: (number | null)[]; temperature_2m_min: (number | null)[] } } {
-  const indices: number[] = [];
-  response.daily.time.forEach((t, i) => {
-    if (t >= startDate && t <= endDate) {
-      indices.push(i);
-    }
-  });
-  return {
-    daily: {
-      time: indices.map((i) => response.daily.time[i]),
-      temperature_2m_max: indices.map((i) => response.daily.temperature_2m_max[i]),
-      temperature_2m_min: indices.map((i) => response.daily.temperature_2m_min[i]),
-    },
-  };
 }

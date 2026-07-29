@@ -148,6 +148,31 @@ body {
   width: 100%;
 }
 
+.date-error-info {
+  color: var(--accent);
+}
+
+/* Message banner (error / info) */
+.message-banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.message-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.message-info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
 /* Year Selector */
 .year-selector {
   width: 100%;
@@ -354,6 +379,18 @@ body {
 
 .data-table tbody tr:hover {
   background: var(--accent-bg);
+}
+
+.data-table .year-divider td {
+  background: #eef2ff;
+  color: var(--accent);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 8px 12px;
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
 }
 
 /* Footer */

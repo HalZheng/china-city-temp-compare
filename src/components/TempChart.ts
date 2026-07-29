@@ -10,7 +10,6 @@ import {
   Title,
 } from 'chart.js';
 import type { YearlyData, TempType } from '../types';
-import { formatMonthDay } from '../utils/helpers';
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Title);
 
@@ -18,7 +17,7 @@ interface TempChartProps {
   container: HTMLElement;
 }
 
-export function TempChart({ container }: TempChartProps): { update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string) => void; saveImage: (cityName: string) => void; destroy: () => void } {
+export function TempChart({ container }: TempChartProps): { update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[]) => void; saveImage: (cityName: string) => void; destroy: () => void } {
   const wrapper = document.createElement('div');
   wrapper.className = 'chart-wrapper';
   wrapper.style.position = 'relative';
@@ -73,7 +72,7 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
     saveImage(currentCityName);
   });
 
-  function update(data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string) {
+  function update(data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[]) {
     currentCityName = cityName;
     if (chart) {
       chart.destroy();
@@ -81,18 +80,15 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
 
     if (data.length === 0) return;
 
-    const baseData = data.find((d) => d.dates.length > 0) || data[0];
-    const labels = baseData.dates.map((d) => formatMonthDay(d));
-
     const datasets = data.map((yearData) => {
       const temps = tempType === 'max' ? yearData.maxTemps : yearData.minTemps;
       const color = colors[yearData.year] || '#374151';
-      const forecastSet = yearData.forecastIndices || new Set<number>();
+      const forecastFlags = yearData.forecastFlags || [];
 
-      const pointStyles = temps.map((_, i) => (forecastSet.has(i) ? 'rectRot' : 'circle'));
-      const pointRadiusArr = temps.map((_, i) => (forecastSet.has(i) ? 2.5 : 2));
-      const pointHoverRadiusArr = temps.map((_, i) => (forecastSet.has(i) ? 4.5 : 4));
-      const pointBgColors = temps.map((_, i) => (forecastSet.has(i) ? color + '60' : color));
+      const pointStyles = temps.map((_, i) => (forecastFlags[i] ? 'rectRot' : 'circle'));
+      const pointRadiusArr = temps.map((_, i) => (forecastFlags[i] ? 2.5 : 2));
+      const pointHoverRadiusArr = temps.map((_, i) => (forecastFlags[i] ? 4.5 : 4));
+      const pointBgColors = temps.map((_, i) => (forecastFlags[i] ? color + '60' : color));
 
       return {
         label: `${yearData.year}年`,
@@ -109,7 +105,7 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
         segment: {
           borderDash: (ctx: any) => {
             const idx = ctx.p1DataIndex;
-            return forecastSet.has(idx) ? [4, 4] : undefined;
+            return forecastFlags[idx] ? [4, 4] : undefined;
           },
         },
       };
