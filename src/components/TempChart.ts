@@ -87,42 +87,57 @@ export function TempChart({ container }: TempChartProps): {
       const temps = tempType === 'max' ? yd.maxTemps : yd.minTemps;
       const color = colors[yd.year] || '#374151';
       const forecastFlags = yd.forecastFlags || [];
+      const hasForecast = forecastFlags.some(Boolean);
+      const firstFc = forecastFlags.findIndex(Boolean);
 
-      // 单系列绘制：历史段(实线·圆点) 与 预报段(虚线·菱形) 连续拼接于同一 series。
-      // 整条曲线由 ECharts 一次性平滑计算 -> 实线/虚线衔接点天然 C1 连续，消除"折角"；
-      // 每个数据点通过 lineStyle.type 控制"离开该点"的线段样式，symbol/itemStyle 控制点位外观。
-      const dataPts = temps.map((t, i) => {
+      // 历史实线：包含 history + 第一个预报点 firstFc。
+      // 关键技巧：实线多延伸一个点，使边界(firstFc-1)在实线里成为"内部点"，
+      // 其平滑切线由 firstFc-2 与 firstFc 共同决定（更接近整体走势），
+      // 与虚线首段(firstFc-1→firstFc)的方向差更小，从而把衔接折角压到最小。
+      const histData = temps.map((t, i) => {
         if (t === null) return null;
-        const val = Number(t.toFixed(1));
-        if (forecastFlags[i]) {
-          return {
-            value: val,
-            symbol: 'diamond',
-            symbolSize: 5,
-            itemStyle: { color: `${color}99` },
-            // 离开该点的线段(通往下一个预报点)渲染为虚线
-            lineStyle: { color, width: 2, type: 'dashed' },
-          };
-        }
-        return {
-          value: val,
-          symbol: 'circle',
-          symbolSize: 3,
-          itemStyle: { color },
-          lineStyle: { color, width: 2, type: 'solid' },
-        };
+        if (forecastFlags[i] && i !== firstFc) return null;
+        return Number(t.toFixed(1));
       });
-
       series.push({
         name: `${yd.year}年`,
         type: 'line',
-        data: dataPts,
+        data: histData,
         smooth: true,
         showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 3,
         connectNulls: false,
         lineStyle: { color, width: 2 },
+        itemStyle: { color },
         emphasis: { focus: 'series' },
       });
+
+      // 预报虚线：与实线同名 -> 图例只显示一项；含历史末点 firstFc-1 以连接。
+      // 两条 series 各自独立平滑，边界处会有极轻微的切线偏差（ECharts 限制），
+      // 通过上述"实线多延伸一点"已把该偏差压到肉眼难辨的程度。
+      if (hasForecast) {
+        const fcData = temps.map((t, i) => {
+          if (t === null) return null;
+          if (forecastFlags[i]) return Number(t.toFixed(1));
+          if (i === firstFc - 1) return Number(t.toFixed(1));
+          return null;
+        });
+        series.push({
+          name: `${yd.year}年`,
+          type: 'line',
+          data: fcData,
+          smooth: true,
+          showSymbol: true,
+          symbol: 'diamond',
+          symbolSize: 5,
+          connectNulls: false,
+          lineStyle: { color, width: 2, type: 'dashed' },
+          itemStyle: { color: `${color}99` },
+          emphasis: { focus: 'series' },
+          z: 2,
+        });
+      }
     }
 
     if (averageLine && averageLine.length === labels.length) {

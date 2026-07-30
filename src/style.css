@@ -281,7 +281,6 @@ body {
 
 /* Chart Section */
 .chart-section {
-  display: none;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -335,7 +334,6 @@ body {
 
 /* Table Section */
 .table-section {
-  display: none;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -624,4 +622,66 @@ body {
   background: #fef3c7;
   border-radius: 4px;
   vertical-align: middle;
+}
+
+/* ===== 加载骨架屏 =====
+   加载数据时为各区域提供占位，避免内容区"display:none"导致的页面高度跳变。
+   真实内容渲染完成后，骨架 display:none、对应内容容器 display:block。 */
+.skeleton {
+  background: linear-gradient(90deg, #e5e7eb 0%, #f3f4f6 50%, #e5e7eb 100%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+@keyframes skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 图表骨架：绝对定位铺满 chart-container，叠加一条若隐若现的折线暗示图表轮廓 */
+.skeleton-chart {
+  position: absolute;
+  inset: 0;
+  display: block;
+  z-index: 1;
+  overflow: hidden;
+}
+.skeleton-chart::after {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60'><path d='M0,40 Q25,10 50,30 T100,25 T150,35 T200,20' fill='none' stroke='%23d1d5db' stroke-width='2.5' stroke-dasharray='5,5'/></svg>") no-repeat center / contain;
+  opacity: 0.6;
+}
+
+/* 卡片骨架行：横向 flex，3/2 张占位卡片 */
+.skeleton-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.skeleton-card {
+  flex: 1 1 200px;
+  min-width: 160px;
+  height: 88px;
+}
+
+/* 表格骨架：用 repeating 渐变模拟多行表格的占位 */
+.skeleton-table {
+  display: block;
+  height: 320px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.skeleton-table::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 16px;
+  bottom: 16px;
+  background-image: linear-gradient(transparent 30px, #f3f4f6 30px, #f3f4f6 36px);
+  background-size: 100% 36px;
+  border-radius: 4px;
 }

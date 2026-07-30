@@ -131,6 +131,10 @@ chartSection.appendChild(tabContainer);
 
 const chartContainer = document.createElement('div');
 chartContainer.className = 'chart-container';
+// 图表骨架屏：绝对定位铺满 chart-container，加载时遮挡空白画布；数据返回后隐藏
+const chartSkeleton = document.createElement('div');
+chartSkeleton.className = 'skeleton skeleton-chart';
+chartContainer.appendChild(chartSkeleton);
 chartSection.appendChild(chartContainer);
 app.appendChild(chartSection);
 
@@ -140,13 +144,41 @@ const chart = TempChart({ container: chartContainer });
 const statsSection = document.createElement('section');
 statsSection.className = 'stats-container';
 app.appendChild(statsSection);
-const statsCards = StatsCards({ container: statsSection });
+// 骨架屏：3 张占位卡片，加载时显示；数据返回后隐藏
+const statsSkeleton = document.createElement('div');
+statsSkeleton.className = 'skeleton-row';
+for (let i = 0; i < 3; i++) {
+  const c = document.createElement('div');
+  c.className = 'skeleton skeleton-card';
+  statsSkeleton.appendChild(c);
+}
+statsSection.appendChild(statsSkeleton);
+// 真实内容容器：加载时 display:none 隐藏旧值，加载完成后显示
+const statsContent = document.createElement('div');
+statsContent.className = 'stats-content';
+statsContent.style.display = 'none';
+statsSection.appendChild(statsContent);
+const statsCards = StatsCards({ container: statsContent });
 
 // Extreme events section (置于「详细数据」上方)
 const extremeSection = document.createElement('section');
 extremeSection.className = 'extreme-container';
 app.appendChild(extremeSection);
-const extremeCards = ExtremeCards({ container: extremeSection });
+// 骨架屏：2 张占位卡片
+const extremeSkeleton = document.createElement('div');
+extremeSkeleton.className = 'skeleton-row';
+for (let i = 0; i < 2; i++) {
+  const c = document.createElement('div');
+  c.className = 'skeleton skeleton-card';
+  extremeSkeleton.appendChild(c);
+}
+extremeSection.appendChild(extremeSkeleton);
+// 真实内容容器
+const extremeContent = document.createElement('div');
+extremeContent.className = 'extreme-content';
+extremeContent.style.display = 'none';
+extremeSection.appendChild(extremeContent);
+const extremeCards = ExtremeCards({ container: extremeContent });
 
 // Table section
 const tableSection = document.createElement('section');
@@ -154,12 +186,18 @@ tableSection.className = 'table-section';
 const tableTitle = document.createElement('h2');
 tableTitle.textContent = '详细数据';
 tableSection.appendChild(tableTitle);
-const tableContainer = document.createElement('div');
-tableContainer.className = 'table-container';
-tableSection.appendChild(tableContainer);
+// 表格骨架屏
+const tableSkeleton = document.createElement('div');
+tableSkeleton.className = 'skeleton skeleton-table';
+tableSection.appendChild(tableSkeleton);
+// 真实内容容器
+const tableContent = document.createElement('div');
+tableContent.className = 'table-content';
+tableContent.style.display = 'none';
+tableSection.appendChild(tableContent);
 app.appendChild(tableSection);
 
-const dataTable = DataTable({ container: tableContainer });
+const dataTable = DataTable({ container: tableContent });
 
 // Footer
 const footer = document.createElement('footer');
@@ -181,6 +219,27 @@ function showMessage(text: string, type: 'error' | 'info' = 'error') {
 
 function hideMessage() {
   messageEl.style.display = 'none';
+}
+
+// 加载骨架屏控制：显示骨架 + 隐藏旧内容；隐藏骨架 + 显示新内容。
+// 设计目的：避免"display:none 隐藏整个区域"导致的页面高度跳变，骨架与真实内容高度相近，加载时占位、数据回填后无缝切换。
+function showSkeletons() {
+  chartSkeleton.style.display = 'block';
+  statsSkeleton.style.display = 'flex';
+  extremeSkeleton.style.display = 'flex';
+  tableSkeleton.style.display = 'block';
+  statsContent.style.display = 'none';
+  extremeContent.style.display = 'none';
+  tableContent.style.display = 'none';
+}
+function hideSkeletons() {
+  chartSkeleton.style.display = 'none';
+  statsSkeleton.style.display = 'none';
+  extremeSkeleton.style.display = 'none';
+  tableSkeleton.style.display = 'none';
+  statsContent.style.display = 'block';
+  extremeContent.style.display = 'block';
+  tableContent.style.display = 'block';
 }
 
 const mdOf = (dateStr: string) => dateStr.substring(5);
@@ -274,12 +333,8 @@ async function handleQuery() {
   }
 
   state.loading = true;
-  loadingEl.style.display = 'block';
   hideMessage();
-  chartSection.style.display = 'none';
-  tableSection.style.display = 'none';
-  statsSection.style.display = 'none';
-  extremeSection.style.display = 'none';
+  showSkeletons();
   state.yearlyData = [];
 
   const todayStr = formatDate(new Date());
@@ -305,13 +360,9 @@ async function handleQuery() {
   const truncatedYears = results.filter((r) => r.truncated && !r.error).map((r) => r.year);
 
   state.loading = false;
-  loadingEl.style.display = 'none';
+  const hasData = state.yearlyData.length > 0;
 
-  if (state.yearlyData.length > 0) {
-    chartSection.style.display = 'block';
-    tableSection.style.display = 'block';
-    statsSection.style.display = 'block';
-    extremeSection.style.display = 'block';
+  if (hasData) {
     currentLabels = buildMonthDayLabels(state.startMonthDay, state.endMonthDay);
 
     const yearAvgTemps = state.yearlyData.map((r) => {
@@ -331,7 +382,13 @@ async function handleQuery() {
     dataTable.update(state.yearlyData, currentLabels);
     statsCards.update(summary, yearAverages, state.tempType, currentYearColors);
     extremeCards.update(heatwaves, coldWaves, currentYearColors);
-  } else {
+  }
+
+  // 关键顺序：先调用所有 update() 把新内容渲染进仍 display:none 的内容容器，
+  // 再 hideSkeletons() 一次性隐藏骨架 + 显示新内容 -> 避免旧内容闪现
+  hideSkeletons();
+
+  if (!hasData) {
     chartSection.style.display = 'none';
     tableSection.style.display = 'none';
     statsSection.style.display = 'none';
