@@ -38,9 +38,9 @@
 
 ## 国内访问优化（可选）
 
-Vercel 在国内访问偶尔偏慢。若朋友主要在内地，可二选一：
+Vercel 在国内访问偶尔偏慢。若朋友主要在内地，推荐改用 **Cloudflare Pages**（连接 GitHub 自动部署、国内访问通常更稳），完整步骤见 **[`DEPLOY-CF.md`](./DEPLOY-CF.md)**。
 
-- **Cloudflare Pages**：连接 GitHub，Build Command `npm run build`、产物目录 `dist`，国内访问通常更稳。
+- **Cloudflare Pages**：连接 GitHub，Build Command `npm run build`、产物目录 `dist`，国内访问通常更稳。详细图文指南见 `DEPLOY-CF.md`。
 - **Netlify**：同样免费零配置，可直接把本地 `dist/` 目录拖拽上传。
 
 ## 朋友使用须知

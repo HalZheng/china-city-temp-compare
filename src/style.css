@@ -488,28 +488,38 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  font-size: 13px;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  font-size: 15px;
   color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
 .year-avg-title {
-  font-weight: 500;
-  color: var(--text-h);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.year-avg-strip--cold .year-avg-title,
+.year-avg-strip--cold .year-avg-chip b {
+  color: #2563eb;
+}
+
+.year-avg-strip--warm .year-avg-title,
+.year-avg-strip--warm .year-avg-chip b {
+  color: #ea580c;
 }
 
 .year-avg-chip {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 3px 12px;
+  padding: 4px 14px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
-}
-
-.year-avg-chip b {
-  color: var(--text-h);
-  margin-right: 4px;
 }
 
 /* ===== 极端事件卡片区 ===== */
