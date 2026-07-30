@@ -9,6 +9,8 @@
 - 📆 **多年份对比** — 同时对比最多 10 个年份的气温数据
 - 📈 **折线图可视化** — 平滑折线图展示各年度气温走势
 - 🌡️ **最高/最低气温切换** — 可分别查看最高气温和最低气温
+- 📊 **统计概览** — 区间均值、高温日、热夜、寒潮、冰冻日等关键指标卡片
+- 🔥 **极端天气识别** — 自动识别高温热浪与寒潮/严寒时段（基于国标阈值）
 - 🎨 **温度着色** — 高温自动标记醒目颜色，便于识别异常温度
 - 🔮 **预报数据区分** — 当年未发生的日期以虚线展示预报数据
 - 🖼️ **保存为图片** — 一键将图表导出为 PNG 图片
@@ -17,7 +19,7 @@
 ## 🛠️ 技术栈
 
 - **框架**: Vite + TypeScript + Vanilla JS
-- **图表**: Chart.js
+- **图表**: ECharts
 - **数据源**: [Open-Meteo](https://open-meteo.com/) 免费气象 API
 - **地理编码**: Open-Meteo Geocoding API
 
@@ -25,7 +27,7 @@
 
 ### 环境要求
 
-- Node.js >= 18
+- Node.js >= 20.19.0
 - npm
 
 ### 安装与运行
@@ -63,16 +65,22 @@ npm run preview
 ```
 temp-compare/
 ├── public/
-│   └── favicon.svg          # 网站图标
+│   ├── favicon.svg          # 网站图标
+│   └── icons.svg            # 图标集合
 ├── src/
 │   ├── api/
 │   │   └── open-meteo.ts   # Open-Meteo API 封装
 │   ├── components/
 │   │   ├── CitySearch.ts   # 城市搜索组件
+│   │   ├── DataTable.ts    # 详细数据表格组件
 │   │   ├── DateRangePicker.ts  # 日期范围选择器
-│   │   ├── YearSelector.ts # 年份选择器
+│   │   ├── ExtremeCards.ts # 高温热浪 / 寒潮极端天气卡片
+│   │   ├── StatsCards.ts   # 统计概览卡片
 │   │   ├── TempChart.ts    # 气温折线图组件
-│   │   └── DataTable.ts    # 详细数据表格组件
+│   │   └── YearSelector.ts # 年份选择器
+│   ├── logic/
+│   │   ├── extremes.ts     # 极端天气判定阈值与统计
+│   │   └── stats.ts        # 统计计算（均值、多年逐日均值）
 │   ├── types/
 │   │   └── index.ts        # TypeScript 类型定义
 │   ├── utils/
@@ -82,7 +90,9 @@ temp-compare/
 ├── index.html              # HTML 入口
 ├── package.json            # 项目配置
 ├── tsconfig.json           # TypeScript 配置
-└── vite.config.ts          # Vite 配置
+├── vite.config.ts          # Vite 配置
+├── vercel.json             # Vercel 部署配置
+└── .nvmrc                  # Node 版本约束
 ```
 
 ## 🔌 API 说明
