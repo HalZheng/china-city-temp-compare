@@ -503,13 +503,11 @@ body {
   font-weight: 700;
 }
 
-.year-avg-strip--cold .year-avg-title,
-.year-avg-strip--cold .year-avg-chip b {
+.year-avg-strip--cold .year-avg-title {
   color: #2563eb;
 }
 
-.year-avg-strip--warm .year-avg-title,
-.year-avg-strip--warm .year-avg-chip b {
+.year-avg-strip--warm .year-avg-title {
   color: #ea580c;
 }
 
@@ -519,6 +517,11 @@ body {
   border-radius: 999px;
   padding: 4px 14px;
   font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.year-avg-val {
+  margin-left: 2px;
   font-variant-numeric: tabular-nums;
 }
 

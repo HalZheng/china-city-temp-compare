@@ -169,16 +169,14 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
           legend: {
             position: 'top',
             onClick: (_evt: unknown, legendItem: LegendItem, legend: any) => {
+              const ci = legend.chart;
               const index = legendItem.datasetIndex;
               if (index === undefined) return;
-              const ci = legend.chart;
-              if (ci.isDatasetVisible(index)) {
-                ci.hide(index);
-                hiddenDatasets.add(index);
-              } else {
-                ci.show(index);
-                hiddenDatasets.delete(index);
-              }
+              const willShow = !ci.isDatasetVisible(index);
+              ci.setDatasetVisibility(index, willShow);
+              if (willShow) hiddenDatasets.delete(index);
+              else hiddenDatasets.add(index);
+              ci.update('none');
             },
             labels: {
               usePointStyle: true,
@@ -279,7 +277,6 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
     } else {
       const config = createChartOptions(cityName, tempType, labels, datasets);
       chart = new Chart(canvas, config);
-      (canvas as any).__chartjs_instance__ = chart;
     }
   }
 

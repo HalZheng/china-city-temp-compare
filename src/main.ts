@@ -117,7 +117,7 @@ function setTempType(type: TempType) {
     const coldWaves = detectColdWaves(state.yearlyData, currentLabels);
     const summary = buildSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
     const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
-    statsCards.update(summary, yearAverages, state.tempType);
+    statsCards.update(summary, yearAverages, state.tempType, currentYearColors);
     extremeCards.update(heatwaves, coldWaves, currentYearColors);
   }
 }
@@ -327,7 +327,7 @@ async function handleQuery() {
 
     chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine);
     dataTable.update(state.yearlyData, currentLabels);
-    statsCards.update(summary, yearAverages, state.tempType);
+    statsCards.update(summary, yearAverages, state.tempType, currentYearColors);
     extremeCards.update(heatwaves, coldWaves, currentYearColors);
   } else {
     chartSection.style.display = 'none';
