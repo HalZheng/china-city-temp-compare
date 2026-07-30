@@ -34,7 +34,7 @@ export function StatsCards({ container }: StatsCardsProps): {
     strip.className = `year-avg-strip year-avg-strip--${tempType === 'max' ? 'warm' : 'cold'}`;
     const title = document.createElement('span');
     title.className = 'year-avg-title';
-    title.textContent = `各年份平均${tempLabel}：`;
+    title.textContent = `区间平均${tempLabel}：`;
     strip.appendChild(title);
     yearAverages.forEach((ya) => {
       const chip = document.createElement('span');
