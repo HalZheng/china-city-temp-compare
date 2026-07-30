@@ -20,7 +20,7 @@ export function StatsCards({ container }: StatsCardsProps): {
 
     const bar = document.createElement('div');
     bar.className = 'stat-cards';
-    bar.appendChild(statCard(`区间平均${tempLabel}`, fmt(summary.periodAvg), 'neutral'));
+    bar.appendChild(statCard(`区间${tempLabel}均值`, fmt(summary.periodAvg), 'neutral'));
     bar.appendChild(statCard('高温日 (≥35℃)', String(summary.hotDays), 'warm'));
     bar.appendChild(statCard('热夜 (≥25℃)', String(summary.tropicalNights), 'warm'));
     bar.appendChild(statCard('高温热浪 (≥3天)', `${summary.heatwaveCount} 次`, 'warm'));
@@ -34,7 +34,7 @@ export function StatsCards({ container }: StatsCardsProps): {
     strip.className = `year-avg-strip year-avg-strip--${tempType === 'max' ? 'warm' : 'cold'}`;
     const title = document.createElement('span');
     title.className = 'year-avg-title';
-    title.textContent = `区间平均${tempLabel}：`;
+    title.textContent = `区间${tempLabel}均值：`;
     strip.appendChild(title);
     yearAverages.forEach((ya) => {
       const chip = document.createElement('span');

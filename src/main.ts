@@ -142,6 +142,12 @@ statsSection.className = 'stats-container';
 app.appendChild(statsSection);
 const statsCards = StatsCards({ container: statsSection });
 
+// Extreme events section (置于「详细数据」上方)
+const extremeSection = document.createElement('section');
+extremeSection.className = 'extreme-container';
+app.appendChild(extremeSection);
+const extremeCards = ExtremeCards({ container: extremeSection });
+
 // Table section
 const tableSection = document.createElement('section');
 tableSection.className = 'table-section';
@@ -154,12 +160,6 @@ tableSection.appendChild(tableContainer);
 app.appendChild(tableSection);
 
 const dataTable = DataTable({ container: tableContainer });
-
-// Extreme events section
-const extremeSection = document.createElement('section');
-extremeSection.className = 'extreme-container';
-app.appendChild(extremeSection);
-const extremeCards = ExtremeCards({ container: extremeSection });
 
 // Footer
 const footer = document.createElement('footer');
@@ -278,6 +278,8 @@ async function handleQuery() {
   hideMessage();
   chartSection.style.display = 'none';
   tableSection.style.display = 'none';
+  statsSection.style.display = 'none';
+  extremeSection.style.display = 'none';
   state.yearlyData = [];
 
   const todayStr = formatDate(new Date());

@@ -87,51 +87,42 @@ export function TempChart({ container }: TempChartProps): {
       const temps = tempType === 'max' ? yd.maxTemps : yd.minTemps;
       const color = colors[yd.year] || '#374151';
       const forecastFlags = yd.forecastFlags || [];
-      const hasForecast = forecastFlags.some(Boolean);
-      const firstFc = forecastFlags.findIndex(Boolean);
 
-      // 历史实线：仅历史段有值，预报段置 null
-      const histData = temps.map((t, i) =>
-        t === null || forecastFlags[i] ? null : Number(t.toFixed(1)),
-      );
+      // 单系列绘制：历史段(实线·圆点) 与 预报段(虚线·菱形) 连续拼接于同一 series。
+      // 整条曲线由 ECharts 一次性平滑计算 -> 实线/虚线衔接点天然 C1 连续，消除"折角"；
+      // 每个数据点通过 lineStyle.type 控制"离开该点"的线段样式，symbol/itemStyle 控制点位外观。
+      const dataPts = temps.map((t, i) => {
+        if (t === null) return null;
+        const val = Number(t.toFixed(1));
+        if (forecastFlags[i]) {
+          return {
+            value: val,
+            symbol: 'diamond',
+            symbolSize: 5,
+            itemStyle: { color: `${color}99` },
+            // 离开该点的线段(通往下一个预报点)渲染为虚线
+            lineStyle: { color, width: 2, type: 'dashed' },
+          };
+        }
+        return {
+          value: val,
+          symbol: 'circle',
+          symbolSize: 3,
+          itemStyle: { color },
+          lineStyle: { color, width: 2, type: 'solid' },
+        };
+      });
+
       series.push({
         name: `${yd.year}年`,
         type: 'line',
-        data: histData,
+        data: dataPts,
         smooth: true,
         showSymbol: true,
-        symbol: 'circle',
-        symbolSize: 3,
         connectNulls: false,
         lineStyle: { color, width: 2 },
-        itemStyle: { color },
         emphasis: { focus: 'series' },
       });
-
-      // 预报虚线叠加：与历史段同名 -> 图例只显示一项，点击同时控制实线+虚线
-      // 含历史末点以与实线在边界处连接，避免断口
-      if (hasForecast) {
-        const fcData = temps.map((t, i) => {
-          if (t === null) return null;
-          if (forecastFlags[i]) return Number(t.toFixed(1));
-          if (i === firstFc - 1) return Number(t.toFixed(1));
-          return null;
-        });
-        series.push({
-          name: `${yd.year}年`,
-          type: 'line',
-          data: fcData,
-          smooth: true,
-          showSymbol: true,
-          symbol: 'diamond',
-          symbolSize: 5,
-          connectNulls: false,
-          lineStyle: { color, width: 2, type: 'dashed' },
-          itemStyle: { color: `${color}99` },
-          emphasis: { focus: 'series' },
-          z: 2,
-        });
-      }
     }
 
     if (averageLine && averageLine.length === labels.length) {
@@ -161,8 +152,12 @@ export function TempChart({ container }: TempChartProps): {
   ): echarts.EChartsCoreOption {
     const tempLabel = tempType === 'max' ? '最高气温对比' : '最低气温对比';
     return {
-      // 关闭动画：图例切换 / 数据更新均为一帧内完成，避免默认 1s 过渡造成的"卡顿"
-      animation: false,
+      // 图例显隐属于"更新"操作，走 animationDurationUpdate -> 精致过渡动画；
+      // 全量重建(查询/切类型, notMerge:true)使用 animationDuration:0，避免整图入场抖动
+      animation: true,
+      animationDuration: 0,
+      animationDurationUpdate: 300,
+      animationEasingUpdate: 'cubicOut',
       color: Object.values(colors),
       backgroundColor: 'transparent',
       title: {
