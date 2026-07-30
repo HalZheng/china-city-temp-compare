@@ -5,11 +5,12 @@ import {
   TooltipComponent,
   LegendComponent,
   TitleComponent,
+  ToolboxComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { YearlyData, TempType } from '../types';
 
-echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
+echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, ToolboxComponent, CanvasRenderer]);
 
 interface TempChartProps {
   container: HTMLElement;
@@ -19,7 +20,6 @@ type EChartsInstance = ReturnType<typeof echarts.init>;
 
 export function TempChart({ container }: TempChartProps): {
   update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[], averageLine?: (number | null)[]) => void;
-  saveImage: (cityName: string) => void;
   destroy: () => void;
 } {
   const wrapper = document.createElement('div');
@@ -27,43 +27,16 @@ export function TempChart({ container }: TempChartProps): {
   wrapper.style.position = 'relative';
   container.appendChild(wrapper);
 
-  const toolbar = document.createElement('div');
-  toolbar.className = 'chart-toolbar';
-  toolbar.style.display = 'flex';
-  toolbar.style.justifyContent = 'flex-end';
-  toolbar.style.marginBottom = '8px';
-
-  const saveBtn = document.createElement('button');
-  saveBtn.type = 'button';
-  saveBtn.textContent = '保存为图片';
-  saveBtn.className = 'save-img-btn';
-  saveBtn.style.padding = '6px 12px';
-  saveBtn.style.border = '1px solid #e5e7eb';
-  saveBtn.style.borderRadius = '6px';
-  saveBtn.style.background = '#ffffff';
-  saveBtn.style.fontSize = '13px';
-  saveBtn.style.color = '#374151';
-  saveBtn.style.cursor = 'pointer';
-  saveBtn.style.transition = 'all 0.2s';
-  saveBtn.addEventListener('mouseenter', () => {
-    saveBtn.style.background = '#f3f4f6';
-  });
-  saveBtn.addEventListener('mouseleave', () => {
-    saveBtn.style.background = '#ffffff';
-  });
-
-  toolbar.appendChild(saveBtn);
-  wrapper.appendChild(toolbar);
-
   // ECharts 容器必须是带显式尺寸的 <div>（由 CSS 控制高度）
   const chartEl = document.createElement('div');
   chartEl.className = 'temp-chart';
   wrapper.appendChild(chartEl);
 
   let chart: EChartsInstance | null = null;
-  let currentCityName = '';
   // 以「年份整数」为 key 记录被隐藏的系列，跨 tempType 切换 / 重查询保持稳定
   const hiddenYears = new Set<number>();
+  // 「多年平均」默认隐藏
+  let avgHidden = true;
 
   // 调试钩子：仅在 URL 带 ?debug=chart 时暴露实例，便于 E2E 精确读取 option；生产环境无此参数则完全不生效
   if (typeof location !== 'undefined' && location.search.includes('debug=chart')) {
@@ -74,16 +47,18 @@ export function TempChart({ container }: TempChartProps): {
     if (chart) chart.resize();
   });
 
-  // 同步原生图例切换状态，使隐藏年份在 notMerge 重建后得以恢复
+  // 同步原生图例切换状态，使隐藏状态在 notMerge 重建后得以恢复
   function handleLegendSelectChanged(params: any) {
     const sel = params?.selected as Record<string, boolean> | undefined;
     if (!sel) return;
     hiddenYears.clear();
     for (const [name, on] of Object.entries(sel)) {
-      if (!on) {
-        const y = parseYearFromName(name);
-        if (!Number.isNaN(y)) hiddenYears.add(y);
+      if (name === '多年平均') {
+        avgHidden = !on;
+        continue;
       }
+      const y = parseYearFromName(name);
+      if (!Number.isNaN(y) && !on) hiddenYears.add(y);
     }
   }
 
@@ -93,20 +68,6 @@ export function TempChart({ container }: TempChartProps): {
     resizeObserver.observe(chartEl);
     chart.on('legendselectchanged', handleLegendSelectChanged);
   }
-
-  function saveImage(cityName: string) {
-    if (!chart) return;
-    const name = cityName || currentCityName || '气温对比';
-    const url = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#ffffff' });
-    const link = document.createElement('a');
-    link.download = `${name}_气温对比_${new Date().toISOString().slice(0, 10)}.png`;
-    link.href = url;
-    link.click();
-  }
-
-  saveBtn.addEventListener('click', () => {
-    saveImage(currentCityName);
-  });
 
   function parseYearFromName(name: string): number {
     const m = name.match(/^(\d+)/);
@@ -120,46 +81,66 @@ export function TempChart({ container }: TempChartProps): {
     labels: string[],
     averageLine?: (number | null)[],
   ): any[] {
-    const series: any[] = data.map((yd) => {
+    const series: any[] = [];
+
+    for (const yd of data) {
       const temps = tempType === 'max' ? yd.maxTemps : yd.minTemps;
       const color = colors[yd.year] || '#374151';
       const forecastFlags = yd.forecastFlags || [];
-      const points = temps.map((t, i) => {
-        if (t === null) return null;
-        const v = Number(t.toFixed(1));
-        // 预报点用菱形 + 半透明色，与原 Chart.js 视觉意图一致
-        if (forecastFlags[i]) {
-          return {
-            value: v,
-            symbol: 'diamond',
-            symbolSize: 5,
-            itemStyle: { color: `${color}99` },
-          };
-        }
-        return v;
-      });
-      return {
+      const hasForecast = forecastFlags.some(Boolean);
+      const firstFc = forecastFlags.findIndex(Boolean);
+
+      // 历史实线：仅历史段有值，预报段置 null
+      const histData = temps.map((t, i) =>
+        t === null || forecastFlags[i] ? null : Number(t.toFixed(1)),
+      );
+      series.push({
         name: `${yd.year}年`,
         type: 'line',
-        data: points,
+        data: histData,
+        smooth: true,
         showSymbol: true,
         symbol: 'circle',
         symbolSize: 3,
-        smooth: false,
         connectNulls: false,
         lineStyle: { color, width: 2 },
         itemStyle: { color },
         emphasis: { focus: 'series' },
-      };
-    });
+      });
+
+      // 预报虚线叠加：与历史段同名 -> 图例只显示一项，点击同时控制实线+虚线
+      // 含历史末点以与实线在边界处连接，避免断口
+      if (hasForecast) {
+        const fcData = temps.map((t, i) => {
+          if (t === null) return null;
+          if (forecastFlags[i]) return Number(t.toFixed(1));
+          if (i === firstFc - 1) return Number(t.toFixed(1));
+          return null;
+        });
+        series.push({
+          name: `${yd.year}年`,
+          type: 'line',
+          data: fcData,
+          smooth: true,
+          showSymbol: true,
+          symbol: 'diamond',
+          symbolSize: 5,
+          connectNulls: false,
+          lineStyle: { color, width: 2, type: 'dashed' },
+          itemStyle: { color: `${color}99` },
+          emphasis: { focus: 'series' },
+          z: 2,
+        });
+      }
+    }
 
     if (averageLine && averageLine.length === labels.length) {
       series.push({
         name: '多年平均',
         type: 'line',
         data: averageLine.map((t) => (t === null ? null : Number(t.toFixed(1)))),
+        smooth: true,
         showSymbol: false,
-        smooth: false,
         connectNulls: false,
         lineStyle: { type: 'dashed', color: '#6b7280', width: 2 },
         itemStyle: { color: '#6b7280' },
@@ -176,12 +157,14 @@ export function TempChart({ container }: TempChartProps): {
     labels: string[],
     series: any[],
     colors: Record<number, string>,
+    selected: Record<string, boolean>,
   ): echarts.EChartsCoreOption {
     const tempLabel = tempType === 'max' ? '最高气温对比' : '最低气温对比';
     return {
       // 关闭动画：图例切换 / 数据更新均为一帧内完成，避免默认 1s 过渡造成的"卡顿"
       animation: false,
       color: Object.values(colors),
+      backgroundColor: 'transparent',
       title: {
         text: `${cityName} · ${tempLabel}`,
         top: 8,
@@ -200,9 +183,22 @@ export function TempChart({ container }: TempChartProps): {
         top: 44,
         left: 'center',
         selectedMode: true,
+        selected,
         itemWidth: 14,
         itemHeight: 8,
         textStyle: { fontSize: 12, color: '#374151' },
+      },
+      toolbox: {
+        right: 12,
+        top: 6,
+        feature: {
+          saveAsImage: {
+            name: `${cityName}_气温对比`,
+            title: '保存为图片',
+            backgroundColor: '#ffffff',
+            pixelRatio: 2,
+          },
+        },
       },
       grid: { top: 92, left: 56, right: 28, bottom: 48, containLabel: false },
       xAxis: {
@@ -220,6 +216,8 @@ export function TempChart({ container }: TempChartProps): {
       },
       yAxis: {
         type: 'value',
+        // 按可见年份的极值动态自适应纵轴（不含强制 0 基线，避免曲线被压扁）
+        scale: true,
         name: '温度(℃)',
         nameTextStyle: { fontSize: 12, color: '#6b7280' },
         axisLabel: { fontSize: 12, color: '#6b7280', formatter: '{value}°' },
@@ -237,27 +235,22 @@ export function TempChart({ container }: TempChartProps): {
     labels: string[],
     averageLine?: (number | null)[],
   ) {
-    currentCityName = cityName;
-
     if (data.length === 0) return;
 
     const series = buildSeries(data, tempType, colors, labels, averageLine);
-    const option = buildOption(cityName, tempType, labels, series, colors);
+
+    // 依据当前隐藏状态构造 legend.selected（notMerge 会重置选中态，需重建）
+    const selected: Record<string, boolean> = {};
+    for (const s of series) {
+      if (s.name === '多年平均') selected[s.name] = !avgHidden;
+      else selected[s.name] = !hiddenYears.has(parseYearFromName(s.name));
+    }
+
+    const option = buildOption(cityName, tempType, labels, series, colors, selected);
 
     ensureInit();
     // notMerge 保证查询年份变化时不会残留旧系列
     chart!.setOption(option, { notMerge: true });
-
-    // 恢复用户隐藏的年份（notMerge 会重置 legend 选中态）
-    if (hiddenYears.size > 0) {
-      const selected: Record<string, boolean> = {};
-      for (const s of series) {
-        const year = parseYearFromName(s.name);
-        selected[s.name] = !hiddenYears.has(year);
-      }
-      chart!.setOption({ legend: { selected } });
-    }
-
     chart!.resize();
   }
 
@@ -269,5 +262,5 @@ export function TempChart({ container }: TempChartProps): {
     }
   }
 
-  return { update, saveImage, destroy };
+  return { update, destroy };
 }
