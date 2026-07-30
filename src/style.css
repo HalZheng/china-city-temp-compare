@@ -638,7 +638,7 @@ body {
   100% { background-position: -200% 0; }
 }
 
-/* 图表骨架：绝对定位铺满 chart-container，叠加一条若隐若现的折线暗示图表轮廓 */
+/* 图表骨架：绝对定位铺满 chart-container，叠加一条若隐若现的平滑实线暗示图表轮廓 */
 .skeleton-chart {
   position: absolute;
   inset: 0;
@@ -650,7 +650,7 @@ body {
   content: '';
   position: absolute;
   inset: 18px;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60'><path d='M0,40 Q25,10 50,30 T100,25 T150,35 T200,20' fill='none' stroke='%23d1d5db' stroke-width='2.5' stroke-dasharray='5,5'/></svg>") no-repeat center / contain;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60'><path d='M0,40 Q25,10 50,30 T100,25 T150,35 T200,20' fill='none' stroke='%23d1d5db' stroke-width='2'/></svg>") no-repeat center / contain;
   opacity: 0.6;
 }
 

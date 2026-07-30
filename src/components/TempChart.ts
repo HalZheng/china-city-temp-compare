@@ -90,13 +90,12 @@ export function TempChart({ container }: TempChartProps): {
       const hasForecast = forecastFlags.some(Boolean);
       const firstFc = forecastFlags.findIndex(Boolean);
 
-      // 历史实线：包含 history + 第一个预报点 firstFc。
-      // 关键技巧：实线多延伸一个点，使边界(firstFc-1)在实线里成为"内部点"，
-      // 其平滑切线由 firstFc-2 与 firstFc 共同决定（更接近整体走势），
-      // 与虚线首段(firstFc-1→firstFc)的方向差更小，从而把衔接折角压到最小。
+      // 历史实线：仅含 history，终点为 firstFc-1（不含任何预报点）。
+      // 与预报虚线在边界点 firstFc-1 相接但不重叠，避免两段各自平滑时
+      // 重叠区间因切线不同而产生的"不贴合"缝隙。
       const histData = temps.map((t, i) => {
         if (t === null) return null;
-        if (forecastFlags[i] && i !== firstFc) return null;
+        if (forecastFlags[i]) return null;
         return Number(t.toFixed(1));
       });
       series.push({
@@ -113,9 +112,9 @@ export function TempChart({ container }: TempChartProps): {
         emphasis: { focus: 'series' },
       });
 
-      // 预报虚线：与实线同名 -> 图例只显示一项；含历史末点 firstFc-1 以连接。
-      // 两条 series 各自独立平滑，边界处会有极轻微的切线偏差（ECharts 限制），
-      // 通过上述"实线多延伸一点"已把该偏差压到肉眼难辨的程度。
+      // 预报虚线：与实线同名 -> 图例只显示一项；含历史末点 firstFc-1 作为衔接点，
+      // 从 firstFc-1 出发绘制到预报末点。两段共享边界点、无重叠区间，
+      // 各自独立平滑，相接处可能有极轻微切线差，但不会出现重叠错位。
       if (hasForecast) {
         const fcData = temps.map((t, i) => {
           if (t === null) return null;
@@ -130,9 +129,9 @@ export function TempChart({ container }: TempChartProps): {
           smooth: true,
           showSymbol: true,
           symbol: 'diamond',
-          symbolSize: 5,
+          symbolSize: 4,
           connectNulls: false,
-          lineStyle: { color, width: 2, type: 'dashed' },
+          lineStyle: { color, width: 1.5, type: 'dashed' },
           itemStyle: { color: `${color}99` },
           emphasis: { focus: 'series' },
           z: 2,
