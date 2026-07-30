@@ -1,26 +1,27 @@
+import * as echarts from 'echarts/core';
+import { LineChart } from 'echarts/charts';
 import {
-  Chart,
-  LineController,
-  LineElement,
-  PointElement,
-  LinearScale,
-  CategoryScale,
-  Tooltip,
-  Legend,
-  Title,
-  type ChartConfiguration,
-  type TooltipItem,
-  type LegendItem,
-} from 'chart.js';
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  TitleComponent,
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
 import type { YearlyData, TempType } from '../types';
 
-Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Title);
+echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
 
 interface TempChartProps {
   container: HTMLElement;
 }
 
-export function TempChart({ container }: TempChartProps): { update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[], averageLine?: (number | null)[]) => void; saveImage: (cityName: string) => void; destroy: () => void } {
+type EChartsInstance = ReturnType<typeof echarts.init>;
+
+export function TempChart({ container }: TempChartProps): {
+  update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[], averageLine?: (number | null)[]) => void;
+  saveImage: (cityName: string) => void;
+  destroy: () => void;
+} {
   const wrapper = document.createElement('div');
   wrapper.className = 'chart-wrapper';
   wrapper.style.position = 'relative';
@@ -54,18 +55,49 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
   toolbar.appendChild(saveBtn);
   wrapper.appendChild(toolbar);
 
-  const canvas = document.createElement('canvas');
-  canvas.className = 'temp-chart';
-  wrapper.appendChild(canvas);
+  // ECharts 容器必须是带显式尺寸的 <div>（由 CSS 控制高度）
+  const chartEl = document.createElement('div');
+  chartEl.className = 'temp-chart';
+  wrapper.appendChild(chartEl);
 
-  let chart: Chart | null = null;
+  let chart: EChartsInstance | null = null;
   let currentCityName = '';
-  const hiddenDatasets = new Set<number>();
+  // 以「年份整数」为 key 记录被隐藏的系列，跨 tempType 切换 / 重查询保持稳定
+  const hiddenYears = new Set<number>();
+
+  // 调试钩子：仅在 URL 带 ?debug=chart 时暴露实例，便于 E2E 精确读取 option；生产环境无此参数则完全不生效
+  if (typeof location !== 'undefined' && location.search.includes('debug=chart')) {
+    (window as any).__getTempChart = () => chart;
+  }
+
+  const resizeObserver = new ResizeObserver(() => {
+    if (chart) chart.resize();
+  });
+
+  // 同步原生图例切换状态，使隐藏年份在 notMerge 重建后得以恢复
+  function handleLegendSelectChanged(params: any) {
+    const sel = params?.selected as Record<string, boolean> | undefined;
+    if (!sel) return;
+    hiddenYears.clear();
+    for (const [name, on] of Object.entries(sel)) {
+      if (!on) {
+        const y = parseYearFromName(name);
+        if (!Number.isNaN(y)) hiddenYears.add(y);
+      }
+    }
+  }
+
+  function ensureInit() {
+    if (chart) return;
+    chart = echarts.init(chartEl, undefined, { renderer: 'canvas' });
+    resizeObserver.observe(chartEl);
+    chart.on('legendselectchanged', handleLegendSelectChanged);
+  }
 
   function saveImage(cityName: string) {
     if (!chart) return;
     const name = cityName || currentCityName || '气温对比';
-    const url = chart.toBase64Image('image/png', 1);
+    const url = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#ffffff' });
     const link = document.createElement('a');
     link.download = `${name}_气温对比_${new Date().toISOString().slice(0, 10)}.png`;
     link.href = url;
@@ -76,181 +108,124 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
     saveImage(currentCityName);
   });
 
-  function buildDatasets(
+  function parseYearFromName(name: string): number {
+    const m = name.match(/^(\d+)/);
+    return m ? parseInt(m[1], 10) : NaN;
+  }
+
+  function buildSeries(
     data: YearlyData[],
     tempType: TempType,
     colors: Record<number, string>,
     labels: string[],
     averageLine?: (number | null)[],
   ): any[] {
-    const datasets: any[] = data.map((yearData) => {
-      const temps = tempType === 'max' ? yearData.maxTemps : yearData.minTemps;
-      const color = colors[yearData.year] || '#374151';
-      const forecastFlags = yearData.forecastFlags || [];
-
-      const pointStyles = temps.map((_, i) => (forecastFlags[i] ? 'rectRot' : 'circle'));
-      const pointRadiusArr = temps.map((_, i) => (forecastFlags[i] ? 2.5 : 2));
-      const pointHoverRadiusArr = temps.map((_, i) => (forecastFlags[i] ? 4.5 : 4));
-      const pointBgColors = temps.map((_, i) => (forecastFlags[i] ? color + '60' : color));
-
+    const series: any[] = data.map((yd) => {
+      const temps = tempType === 'max' ? yd.maxTemps : yd.minTemps;
+      const color = colors[yd.year] || '#374151';
+      const forecastFlags = yd.forecastFlags || [];
+      const points = temps.map((t, i) => {
+        if (t === null) return null;
+        const v = Number(t.toFixed(1));
+        // 预报点用菱形 + 半透明色，与原 Chart.js 视觉意图一致
+        if (forecastFlags[i]) {
+          return {
+            value: v,
+            symbol: 'diamond',
+            symbolSize: 5,
+            itemStyle: { color: `${color}99` },
+          };
+        }
+        return v;
+      });
       return {
-        label: `${yearData.year}年`,
-        data: temps.map((t) => (t !== null ? Number(t.toFixed(1)) : null)),
-        borderColor: color,
-        backgroundColor: color,
-        tension: 0.4,
-        pointRadius: pointRadiusArr,
-        pointHoverRadius: pointHoverRadiusArr,
-        pointStyle: pointStyles,
-        pointBackgroundColor: pointBgColors,
-        borderWidth: 1.5,
-        spanGaps: false,
-        segment: {
-          borderDash: (ctx: any) => {
-            const idx = ctx.p1DataIndex;
-            return forecastFlags[idx] ? [4, 4] : undefined;
-          },
-        },
+        name: `${yd.year}年`,
+        type: 'line',
+        data: points,
+        showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 3,
+        smooth: false,
+        connectNulls: false,
+        lineStyle: { color, width: 2 },
+        itemStyle: { color },
+        emphasis: { focus: 'series' },
       };
     });
 
     if (averageLine && averageLine.length === labels.length) {
-      datasets.push({
-        label: '多年平均',
-        data: averageLine.map((t) => (t !== null ? Number(t.toFixed(1)) : null)),
-        borderColor: '#6b7280',
-        backgroundColor: '#6b7280',
-        borderDash: [6, 5],
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 0,
-        tension: 0.4,
-        spanGaps: false,
+      series.push({
+        name: '多年平均',
+        type: 'line',
+        data: averageLine.map((t) => (t === null ? null : Number(t.toFixed(1)))),
+        showSymbol: false,
+        smooth: false,
+        connectNulls: false,
+        lineStyle: { type: 'dashed', color: '#6b7280', width: 2 },
+        itemStyle: { color: '#6b7280' },
+        z: 1,
       });
     }
 
-    return datasets;
+    return series;
   }
 
-  function applyHiddenState(datasets: any[]) {
-    const validIndices = new Set(datasets.map((_, i) => i));
-    for (const idx of Array.from(hiddenDatasets)) {
-      if (!validIndices.has(idx)) {
-        hiddenDatasets.delete(idx);
-      }
-    }
-    datasets.forEach((_, i) => {
-      if (hiddenDatasets.has(i)) {
-        datasets[i].hidden = true;
-      }
-    });
-  }
-
-  function createChartOptions(
+  function buildOption(
     cityName: string,
     tempType: TempType,
     labels: string[],
-    datasets: any[],
-  ): ChartConfiguration<'line'> {
+    series: any[],
+    colors: Record<number, string>,
+  ): echarts.EChartsCoreOption {
+    const tempLabel = tempType === 'max' ? '最高气温对比' : '最低气温对比';
     return {
-      type: 'line',
-      data: {
-        labels,
-        datasets,
+      // 关闭动画：图例切换 / 数据更新均为一帧内完成，避免默认 1s 过渡造成的"卡顿"
+      animation: false,
+      color: Object.values(colors),
+      title: {
+        text: `${cityName} · ${tempLabel}`,
+        top: 8,
+        left: 'center',
+        textStyle: { fontSize: 15, color: '#111827', fontWeight: 500 },
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-          mode: 'index',
-          intersect: false,
-        },
-        plugins: {
-          legend: {
-            position: 'top',
-            onClick: (_evt: unknown, legendItem: LegendItem, legend: any) => {
-              const ci = legend.chart;
-              const index = legendItem.datasetIndex;
-              if (index === undefined) return;
-              const willShow = !ci.isDatasetVisible(index);
-              ci.setDatasetVisibility(index, willShow);
-              if (willShow) hiddenDatasets.delete(index);
-              else hiddenDatasets.add(index);
-              ci.update('none');
-            },
-            labels: {
-              usePointStyle: true,
-              pointStyle: 'circle',
-              padding: 16,
-              font: {
-                size: 12,
-                family: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-              },
-              boxWidth: 8,
-              boxHeight: 8,
-            },
-          },
-          title: {
-            display: true,
-            text: `${cityName} · ${tempType === 'max' ? '最高气温对比' : '最低气温对比'}`,
-            font: {
-              size: 15,
-              weight: 500,
-              family: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-            },
-            padding: { bottom: 16 },
-            color: '#111827',
-          },
-          tooltip: {
-            backgroundColor: 'rgba(17, 24, 39, 0.92)',
-            titleFont: { size: 13 },
-            bodyFont: { size: 13 },
-            padding: 10,
-            cornerRadius: 8,
-            callbacks: {
-              title: (items: TooltipItem<'line'>[]) => {
-                return items[0]?.label || '';
-              },
-              label: (item: TooltipItem<'line'>) => {
-                const val = item.parsed.y;
-                return `${item.dataset.label}: ${val !== null ? val + '℃' : '无数据'}`;
-              },
-            },
-          },
-        },
-        scales: {
-          x: {
-            grid: {
-              color: 'rgba(0,0,0,0.04)',
-            },
-            ticks: {
-              font: { size: 12 },
-              color: '#6b7280',
-            },
-            title: {
-              display: true,
-              text: '日期',
-              font: { size: 12, weight: 500 },
-              color: '#6b7280',
-            },
-          },
-          y: {
-            grid: {
-              color: 'rgba(0,0,0,0.04)',
-            },
-            ticks: {
-              font: { size: 12 },
-              color: '#6b7280',
-            },
-            title: {
-              display: true,
-              text: '温度 (℃)',
-              font: { size: 12, weight: 500 },
-              color: '#6b7280',
-            },
-          },
-        },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'rgba(17, 24, 39, 0.92)',
+        borderWidth: 0,
+        textStyle: { color: '#ffffff', fontSize: 13 },
+        valueFormatter: (value: any) => (value == null ? '无数据' : `${value}℃`),
       },
+      legend: {
+        type: 'scroll',
+        top: 44,
+        left: 'center',
+        selectedMode: true,
+        itemWidth: 14,
+        itemHeight: 8,
+        textStyle: { fontSize: 12, color: '#374151' },
+      },
+      grid: { top: 92, left: 56, right: 28, bottom: 48, containLabel: false },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        boundaryGap: false,
+        name: '日期',
+        nameLocation: 'middle',
+        nameGap: 30,
+        nameTextStyle: { fontSize: 12, color: '#6b7280' },
+        axisLine: { lineStyle: { color: '#e5e7eb' } },
+        axisTick: { show: false },
+        axisLabel: { fontSize: 12, color: '#6b7280' },
+        splitLine: { show: true, lineStyle: { color: 'rgba(0,0,0,0.04)' } },
+      },
+      yAxis: {
+        type: 'value',
+        name: '温度(℃)',
+        nameTextStyle: { fontSize: 12, color: '#6b7280' },
+        axisLabel: { fontSize: 12, color: '#6b7280', formatter: '{value}°' },
+        splitLine: { lineStyle: { color: 'rgba(0,0,0,0.06)' } },
+      },
+      series,
     };
   }
 
@@ -266,23 +241,30 @@ export function TempChart({ container }: TempChartProps): { update: (data: Yearl
 
     if (data.length === 0) return;
 
-    const datasets = buildDatasets(data, tempType, colors, labels, averageLine);
-    applyHiddenState(datasets);
+    const series = buildSeries(data, tempType, colors, labels, averageLine);
+    const option = buildOption(cityName, tempType, labels, series, colors);
 
-    if (chart) {
-      chart.data.labels = labels;
-      chart.data.datasets = datasets;
-      chart.options.plugins!.title!.text = `${cityName} · ${tempType === 'max' ? '最高气温对比' : '最低气温对比'}`;
-      chart.update('none');
-    } else {
-      const config = createChartOptions(cityName, tempType, labels, datasets);
-      chart = new Chart(canvas, config);
+    ensureInit();
+    // notMerge 保证查询年份变化时不会残留旧系列
+    chart!.setOption(option, { notMerge: true });
+
+    // 恢复用户隐藏的年份（notMerge 会重置 legend 选中态）
+    if (hiddenYears.size > 0) {
+      const selected: Record<string, boolean> = {};
+      for (const s of series) {
+        const year = parseYearFromName(s.name);
+        selected[s.name] = !hiddenYears.has(year);
+      }
+      chart!.setOption({ legend: { selected } });
     }
+
+    chart!.resize();
   }
 
   function destroy() {
+    resizeObserver.disconnect();
     if (chart) {
-      chart.destroy();
+      chart.dispose();
       chart = null;
     }
   }

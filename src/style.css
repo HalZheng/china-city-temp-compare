@@ -327,9 +327,10 @@ body {
   flex-direction: column;
 }
 
-.chart-wrapper canvas {
+.chart-wrapper .temp-chart {
   flex: 1;
   min-height: 0;
+  width: 100%;
 }
 
 /* Table Section */
