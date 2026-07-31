@@ -3,6 +3,11 @@ import { Mandarin } from 'flatpickr/dist/l10n/zh.js';
 import 'flatpickr/dist/flatpickr.css';
 import { getDefaultDateRange, getMonthDayFromDate } from '../utils/helpers';
 
+export interface DateRangePickerInstance {
+  element: HTMLElement;
+  setRange: (start: string, end: string) => void;
+}
+
 interface DateRangePickerProps {
   onChange: (start: string, end: string) => void;
 }
@@ -20,7 +25,7 @@ interface MonthDayInput {
  * - 允许起始月日 > 结束月日（如 12-01 至 02-28），用于跨年对比
  * - 中文 locale、移动端自适应、夜间模式（通过 CSS 变量覆盖）
  */
-export function DateRangePicker({ onChange }: DateRangePickerProps): HTMLElement {
+export function DateRangePicker({ onChange }: DateRangePickerProps): DateRangePickerInstance {
   const container = document.createElement('div');
   container.className = 'date-range-picker';
 
@@ -34,6 +39,11 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): HTMLElement
   const startInput = createMonthDayInput('起始日期');
   const endInput = createMonthDayInput('结束日期');
 
+  const startMd = getMonthDayFromDate(defaultRange.start);
+  const endMd = getMonthDayFromDate(defaultRange.end);
+  startInput.input.value = startMd;
+  endInput.input.value = endMd;
+
   const sep = document.createElement('span');
   sep.className = 'date-separator';
   sep.textContent = '至';
@@ -42,6 +52,16 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): HTMLElement
   hint.className = 'date-hint';
 
   container.append(startInput.wrap, sep, endInput.wrap, hint);
+
+  // 同步通知默认值，避免外部在 flatpickr 异步初始化完成前就使用空字符串
+  emit(startMd, endMd);
+
+  function emit(sMd: string, eMd: string) {
+    const isWrap = sMd > eMd;
+    hint.textContent = isWrap ? '已选择跨年区间：将对比每年该时段（起始年→次年）' : '';
+    hint.classList.toggle('date-hint--info', isWrap);
+    onChange(sMd, eMd);
+  }
 
   function createMonthDayInput(label: string): MonthDayInput {
     const wrap = document.createElement('div');
@@ -64,10 +84,7 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): HTMLElement
     if (!sDate || !eDate) return;
     const sMd = getMonthDayFromDate(formatDateFromJsDate(sDate));
     const eMd = getMonthDayFromDate(formatDateFromJsDate(eDate));
-    const isWrap = sMd > eMd;
-    hint.textContent = isWrap ? '已选择跨年区间：将对比每年该时段（起始年→次年）' : '';
-    hint.classList.toggle('date-hint--info', isWrap);
-    onChange(sMd, eMd);
+    emit(sMd, eMd);
   }
 
   function initFlatpickr(input: HTMLInputElement, defaultDate: string) {
@@ -80,6 +97,14 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): HTMLElement
       static: false,
       onChange: () => notify(),
     });
+  }
+
+  function setRange(start: string, end: string) {
+    startInput.input.value = start;
+    endInput.input.value = end;
+    if (startInput.fp) startInput.fp.setDate(monthDayToDate(start), true);
+    if (endInput.fp) endInput.fp.setDate(monthDayToDate(end), true);
+    emit(start, end);
   }
 
   // 延迟到挂载 DOM 后初始化
@@ -101,7 +126,7 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): HTMLElement
     }
   });
 
-  return container;
+  return { element: container, setRange };
 }
 
 function formatDateFromJsDate(d: Date): string {

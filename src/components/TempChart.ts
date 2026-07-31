@@ -99,8 +99,9 @@ export function TempChart({ container }: TempChartProps): {
         if (forecastFlags[i]) return null;
         return Number(t.toFixed(1));
       });
+      const yearName = `${yd.year}`;
       series.push({
-        name: `${yd.year}年`,
+        name: yearName,
         type: 'line',
         data: histData,
         smooth: true,
@@ -124,7 +125,7 @@ export function TempChart({ container }: TempChartProps): {
           return null;
         });
         series.push({
-          name: `${yd.year}年`,
+          name: yearName,
           type: 'line',
           data: fcData,
           smooth: true,
@@ -187,15 +188,21 @@ export function TempChart({ container }: TempChartProps): {
       animationEasingUpdate: 'cubicOut',
       color: Object.values(colors),
       backgroundColor: 'transparent',
-      title: {
-        text: `${cityName} · ${tempLabel}`,
-        subtext: legendCaption,
-        top: 8,
-        left: 'center',
-        textStyle: { fontSize: 15, color: cTextH, fontWeight: 500 },
-        subtextStyle: { fontSize: 11, color: cMuted },
-        itemGap: 4,
-      },
+      title: [
+        {
+          text: `${cityName} · ${tempLabel}`,
+          top: 8,
+          left: 'center',
+          textStyle: { fontSize: 15, color: cTextH, fontWeight: 500 },
+        },
+        {
+          text: legendCaption,
+          top: 64,
+          left: 12,
+          textStyle: { fontSize: 12, color: cText, fontWeight: 400 },
+          padding: 0,
+        },
+      ],
       tooltip: {
         trigger: 'axis',
         backgroundColor: 'rgba(17, 24, 39, 0.92)',
@@ -206,7 +213,8 @@ export function TempChart({ container }: TempChartProps): {
       legend: {
         type: 'scroll',
         top: 64,
-        left: 'center',
+        left: 116,
+        right: 12,
         selectedMode: true,
         selected,
         itemWidth: 14,
@@ -218,7 +226,7 @@ export function TempChart({ container }: TempChartProps): {
           const y = parseYearFromName(name);
           if (Number.isNaN(y)) return name;
           const avg = avgMap[y];
-          return `{year|${name}}\n{temp|${avg != null ? avg.toFixed(1) + '℃' : '—'}}`;
+          return `{year|${y}}\n{temp|${avg != null ? avg.toFixed(1) + '℃' : '—'}}`;
         },
         textStyle: {
           fontSize: 12,

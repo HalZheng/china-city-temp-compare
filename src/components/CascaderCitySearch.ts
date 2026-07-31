@@ -15,6 +15,11 @@ export interface CascaderCitySearchProps {
   defaultCity: City;
 }
 
+export interface CascaderCitySearchInstance {
+  element: HTMLElement;
+  update: (city: City) => void;
+}
+
 /** pca.json 结构：省 -> 市 -> 区县列表 */
 type PcaData = Record<string, Record<string, string[]>>;
 
@@ -191,7 +196,8 @@ function injectStyles(): void {
   border-radius: 6px;
   cursor: pointer;
 }
-.city-search__result:hover { background: var(--accent-bg); }
+.city-search__result:hover,
+.city-search__result.is-active { background: var(--accent-bg); }
 .city-search__result-name { color: var(--text-h); font-size: 14px; }
 .city-search__result-path { color: var(--icon); font-size: 12px; margin-top: 2px; }
 
@@ -211,7 +217,7 @@ function injectStyles(): void {
   document.head.appendChild(style);
 }
 
-export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearchProps): HTMLElement {
+export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearchProps): CascaderCitySearchInstance {
   injectStyles();
 
   const container = document.createElement('div');
@@ -315,8 +321,10 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
     }
   }
 
-  async function selectEntry(entry: FlatEntry): Promise<void> {
-    if (inFlight) return;
+
+
+  async function selectEntry(entry: FlatEntry, suppressOnSelect = false): Promise<City | null> {
+    if (inFlight) return null;
     inFlight = true;
     resultsEl.style.display = 'block';
     resultsEl.innerHTML = '<div class="city-search__loading"><sl-spinner></sl-spinner></div>';
@@ -325,7 +333,7 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
       if (!picked) {
         resultsEl.innerHTML = '<div class="city-search__empty city-search__empty--error">未找到该地区的坐标数据</div>';
         inFlight = false;
-        return;
+        return null;
       }
       searchInput.value = entry.district;
       resultsEl.style.display = 'none';
@@ -335,33 +343,66 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
       renderCities();
       renderDistricts();
       distSelect.value = entry.district;
-      onSelect({
+      const city: City = {
         name: entry.district,
         latitude: picked.latitude,
         longitude: picked.longitude,
         admin1: picked.admin1,
         country: picked.country,
-      });
+      };
+      if (!suppressOnSelect) onSelect(city);
+      return city;
     } catch {
       resultsEl.innerHTML = '<div class="city-search__empty city-search__empty--error">获取坐标失败，请重试</div>';
+      return null;
     } finally {
       inFlight = false;
     }
   }
 
+  let currentResults: FlatEntry[] = [];
+  let activeIndex = -1;
+
   function renderResults(query: string): void {
     resultsEl.innerHTML = '';
-    const entries = searchEntries(query);
-    if (entries.length === 0) {
+    currentResults = searchEntries(query);
+    activeIndex = -1;
+    if (currentResults.length === 0) {
       resultsEl.innerHTML = '<div class="city-search__empty">未找到匹配地区</div>';
       return;
     }
-    for (const e of entries) {
+    currentResults.forEach((e, idx) => {
       const item = document.createElement('div');
       item.className = 'city-search__result';
+      item.setAttribute('data-index', String(idx));
       item.innerHTML = `<span class="city-search__result-name">${e.district}</span><span class="city-search__result-path">${formatPath(e)}</span>`;
       item.addEventListener('click', () => void selectEntry(e));
+      item.addEventListener('mouseenter', () => setActiveIndex(idx));
       resultsEl.appendChild(item);
+    });
+  }
+
+  function setActiveIndex(idx: number): void {
+    activeIndex = idx;
+    const items = resultsEl.querySelectorAll('.city-search__result');
+    items.forEach((el, i) => {
+      el.classList.toggle('is-active', i === idx);
+    });
+  }
+
+  function moveActive(delta: number): void {
+    if (currentResults.length === 0) return;
+    let next = activeIndex + delta;
+    if (next < 0) next = currentResults.length - 1;
+    if (next >= currentResults.length) next = 0;
+    setActiveIndex(next);
+    const activeEl = resultsEl.querySelector(`[data-index="${next}"]`);
+    if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+  }
+
+  function confirmActive(): void {
+    if (activeIndex >= 0 && activeIndex < currentResults.length) {
+      void selectEntry(currentResults[activeIndex]);
     }
   }
 
@@ -409,18 +450,52 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
     }
   });
 
+  searchInput.addEventListener('keydown', (e) => {
+    if (resultsEl.style.display === 'none') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (activeIndex === -1) setActiveIndex(0);
+      else moveActive(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (activeIndex === -1) setActiveIndex(currentResults.length - 1);
+      else moveActive(-1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      confirmActive();
+    } else if (e.key === 'Escape') {
+      resultsEl.style.display = 'none';
+    }
+  });
+
   document.addEventListener('click', (e) => {
     if (!container.contains(e.target as Node)) {
       resultsEl.style.display = 'none';
     }
   });
 
-  // 初始化
+  // 初始化省份/城市/区县列表
   renderProvinces();
   renderCities();
   renderDistricts();
 
-  return container;
+  // 外部通过经纬度更新城市时，只刷新 UI 不触发 onSelect
+  async function update(city: City): Promise<void> {
+    const entry = getFlatIndex().find((e) => e.district === city.name);
+    if (entry) {
+      await selectEntry(entry, true);
+    } else {
+      // 未在行政区划库中找到时（如"当前位置"），仅更新搜索框显示
+      searchInput.value = city.name;
+      selectedProvince = '';
+      selectedCity = '';
+      renderProvinces();
+      renderCities();
+      renderDistricts();
+    }
+  }
+
+  return { element: container, update };
 }
 
 function formatPath(e: FlatEntry): string {

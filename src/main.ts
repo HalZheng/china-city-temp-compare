@@ -6,17 +6,19 @@ import { YearSelector } from './components/YearSelector';
 import { TempChart } from './components/TempChart';
 import { DataTable } from './components/DataTable';
 import { fetchHistoricalWeather, fetchForecastWeather } from './api/open-meteo';
-import { formatDate, buildMonthDayLabels, isWrappingRange, assignColorsByAverageTemp } from './utils/helpers';
+import { formatDate, buildMonthDayLabels, isWrappingRange, assignColorsByAverageTemp, getDefaultDateRange, getRecentYears } from './utils/helpers';
 import { detectHeatwaves, detectColdWaves } from './logic/extremes';
 import { buildSummaryStats, buildYearAverages, multiYearDailyAverage } from './logic/stats';
 import { StatsCards } from './components/StatsCards';
 import { ExtremeCards } from './components/ExtremeCards';
 
-const defaultCity: City = {
+const FALLBACK_CITY: City = {
   name: '大连',
   latitude: 38.92,
   longitude: 121.62,
 };
+
+let defaultCity: City = FALLBACK_CITY;
 
 const state: AppState = {
   city: defaultCity,
@@ -91,6 +93,27 @@ const citySearch = CascaderCitySearch({
   defaultCity,
 });
 
+// 尝试获取当前地理位置；成功后将默认城市切换为"当前位置"
+function initGeolocation() {
+  if (!('geolocation' in navigator)) return;
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const currentCity: City = {
+        name: '当前位置',
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      };
+      defaultCity = currentCity;
+      state.city = currentCity;
+      await citySearch.update(currentCity);
+    },
+    () => {
+      // 获取失败时保持默认城市（大连）
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
+  );
+}
+
 const dateRangePicker = DateRangePicker({
   onChange: (start, end) => {
     state.startMonthDay = start;
@@ -104,16 +127,29 @@ const yearSelector = YearSelector({
   },
 });
 
+const DEFAULT_YEARS = getRecentYears(5, false);
+const DEFAULT_RANGE = getDefaultDateRange();
+const DEFAULT_START_MD = DEFAULT_RANGE.start.slice(5);
+const DEFAULT_END_MD = DEFAULT_RANGE.end.slice(5);
+const DEFAULT_TEMP_TYPE: TempType = 'max';
+const DEFAULT_THEME: ThemeMode = 'auto';
+
 const queryBtn = document.createElement('button');
 queryBtn.type = 'button';
 queryBtn.textContent = '查询';
 queryBtn.className = 'query-btn';
 
-controls.appendChild(citySearch);
-controls.appendChild(dateRangePicker);
-controls.appendChild(yearSelector);
+controls.appendChild(citySearch.element);
+controls.appendChild(dateRangePicker.element);
+controls.appendChild(yearSelector.element);
 controls.appendChild(queryBtn);
 app.appendChild(controls);
+
+// 先应用 URL 参数；若 URL 已指定城市，则不再请求当前位置
+applyUrlParams();
+if (!new URLSearchParams(location.search).has('city')) {
+  initGeolocation();
+}
 
 // Loading
 const loadingEl = document.createElement('div');
@@ -270,6 +306,105 @@ function showMessage(text: string, type: 'error' | 'info' = 'error') {
 
 function hideMessage() {
   messageEl.style.display = 'none';
+}
+
+// ===== URL 路由：读写查询条件，分享链接可复现 =====
+function parseCityFromParam(value: string): City | null {
+  // 支持两种格式：城市名（如"大连"）或当前位置坐标（如"current:38.92,121.62"）
+  if (value.startsWith('current:')) {
+    const [lat, lng] = value.slice(8).split(',').map(Number);
+    if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+      return { name: '当前位置', latitude: lat, longitude: lng };
+    }
+    return null;
+  }
+  if (!value) return null;
+  // 默认按大连的坐标兜底，名称使用 URL 中的值
+  return { name: value, latitude: 38.92, longitude: 121.62 };
+}
+
+function cityToParam(city: City): string {
+  if (city.name === '当前位置') {
+    return `current:${city.latitude.toFixed(4)},${city.longitude.toFixed(4)}`;
+  }
+  return city.name;
+}
+
+function applyUrlParams(): void {
+  const params = new URLSearchParams(location.search);
+
+  const cityParam = params.get('city');
+  if (cityParam) {
+    const parsed = parseCityFromParam(cityParam);
+    if (parsed) {
+      defaultCity = parsed;
+      state.city = parsed;
+      void citySearch.update(parsed);
+    }
+  }
+
+  const startParam = params.get('start');
+  const endParam = params.get('end');
+  if (startParam && endParam) {
+    state.startMonthDay = startParam;
+    state.endMonthDay = endParam;
+    dateRangePicker.setRange(startParam, endParam);
+  }
+
+  const yearsParam = params.get('years');
+  if (yearsParam) {
+    const years = yearsParam
+      .split(',')
+      .map((y) => parseInt(y, 10))
+      .filter((y) => !Number.isNaN(y));
+    if (years.length > 0) {
+      yearSelector.setYears(years);
+    }
+  }
+
+  const typeParam = params.get('type') as TempType | null;
+  if (typeParam === 'max' || typeParam === 'min') {
+    setTempType(typeParam);
+  }
+
+  const themeParam = params.get('theme') as ThemeMode | null;
+  if (themeParam === 'light' || themeParam === 'dark' || themeParam === 'auto') {
+    applyTheme(themeParam);
+  }
+}
+
+function updateUrlFromState(): void {
+  const params = new URLSearchParams();
+
+  if (state.city.name !== FALLBACK_CITY.name) {
+    params.set('city', cityToParam(state.city));
+  }
+
+  if (state.startMonthDay && state.endMonthDay) {
+    if (state.startMonthDay !== DEFAULT_START_MD || state.endMonthDay !== DEFAULT_END_MD) {
+      params.set('start', state.startMonthDay);
+      params.set('end', state.endMonthDay);
+    }
+  }
+
+  const yearsStr = state.selectedYears.join(',');
+  const defaultYearsStr = DEFAULT_YEARS.join(',');
+  if (yearsStr && yearsStr !== defaultYearsStr) {
+    params.set('years', yearsStr);
+  }
+
+  if (state.tempType !== DEFAULT_TEMP_TYPE) {
+    params.set('type', state.tempType);
+  }
+
+  const currentTheme = (localStorage.getItem('theme') as ThemeMode | null) ?? DEFAULT_THEME;
+  if (currentTheme !== DEFAULT_THEME) {
+    params.set('theme', currentTheme);
+  }
+
+  const query = params.toString();
+  const newUrl = query ? `${location.pathname}?${query}` : location.pathname;
+  window.history.replaceState({}, '', newUrl);
 }
 
 // 加载骨架屏控制：显示骨架 + 隐藏旧内容；隐藏骨架 + 显示新内容。
@@ -438,6 +573,11 @@ async function handleQuery() {
   // 关键顺序：先调用所有 update() 把新内容渲染进仍 display:none 的内容容器，
   // 再 hideSkeletons() 一次性隐藏骨架 + 显示新内容 -> 避免旧内容闪现
   hideSkeletons();
+
+  // 查询成功后把非默认条件写入 URL，方便分享
+  if (hasData) {
+    updateUrlFromState();
+  }
 
   if (!hasData) {
     chartSection.style.display = 'none';

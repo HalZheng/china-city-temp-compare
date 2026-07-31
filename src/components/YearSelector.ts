@@ -4,7 +4,12 @@ interface YearSelectorProps {
   onChange: (years: number[]) => void;
 }
 
-export function YearSelector({ onChange }: YearSelectorProps): HTMLElement {
+export interface YearSelectorInstance {
+  element: HTMLElement;
+  setYears: (years: number[]) => void;
+}
+
+export function YearSelector({ onChange }: YearSelectorProps): YearSelectorInstance {
   const container = document.createElement('div');
   container.className = 'year-selector';
 
@@ -111,8 +116,16 @@ export function YearSelector({ onChange }: YearSelectorProps): HTMLElement {
   container.appendChild(hint);
   container.appendChild(checkboxContainer);
 
+  function setYears(years: number[]) {
+    selectedYears = new Set(years.filter((y) => allYears.includes(y)).slice(0, 10));
+    checkboxes.forEach(({ year, input }) => {
+      input.checked = selectedYears.has(year);
+    });
+    notify();
+  }
+
   updateHint();
   onChange(Array.from(selectedYears).sort((a, b) => a - b));
 
-  return container;
+  return { element: container, setYears };
 }
