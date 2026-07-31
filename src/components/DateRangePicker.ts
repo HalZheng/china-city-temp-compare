@@ -1,85 +1,105 @@
 import flatpickr from 'flatpickr';
 import { Mandarin } from 'flatpickr/dist/l10n/zh.js';
 import 'flatpickr/dist/flatpickr.css';
-import { getDefaultDateRange, validateMonthDayRange, getMonthDayFromDate } from '../utils/helpers';
+import { getDefaultDateRange, getMonthDayFromDate } from '../utils/helpers';
 
 interface DateRangePickerProps {
   onChange: (start: string, end: string) => void;
 }
 
+interface MonthDayInput {
+  wrap: HTMLDivElement;
+  input: HTMLInputElement;
+  label: string;
+  fp?: flatpickr.Instance;
+}
+
 /**
- * 日期范围选择器：基于 flatpickr 的日历范围选择。
- * - 月-日范围语义：用户在日历上选两个日期，内部仅取 MM-DD 用于跨年对比
+ * 日期范围选择器：两个独立的月-日选择器，支持跨年区间。
+ * - 左侧选择起始月日，右侧选择结束月日
+ * - 允许起始月日 > 结束月日（如 12-01 至 02-28），用于跨年对比
  * - 中文 locale、移动端自适应、夜间模式（通过 CSS 变量覆盖）
- * - 关键：flatpickr 必须在 input 挂载到 DOM 后初始化，否则事件绑定失败
  */
 export function DateRangePicker({ onChange }: DateRangePickerProps): HTMLElement {
   const container = document.createElement('div');
   container.className = 'date-range-picker';
 
   const defaultRange = getDefaultDateRange();
+  const REFERENCE_YEAR = 2000; // 闰年参考，保证 02-29 可选
 
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'date-input';
-  input.readOnly = true;
-  const startMd = getMonthDayFromDate(defaultRange.start);
-  const endMd = getMonthDayFromDate(defaultRange.end);
-  input.value = `${startMd} 至 ${endMd}`;
+  function monthDayToDate(monthDay: string): Date {
+    return new Date(`${REFERENCE_YEAR}-${monthDay}T00:00:00`);
+  }
 
-  const errorMsg = document.createElement('span');
-  errorMsg.className = 'date-error';
+  const startInput = createMonthDayInput('起始日期');
+  const endInput = createMonthDayInput('结束日期');
 
-  container.appendChild(input);
-  container.appendChild(errorMsg);
+  const sep = document.createElement('span');
+  sep.className = 'date-separator';
+  sep.textContent = '至';
 
-  // 延迟到元素挂载到 DOM 后再初始化 flatpickr（用 microtask 确保挂载完成）
-  const initFlatpickr = () => {
-    flatpickr(input, {
-      mode: 'range',
+  const hint = document.createElement('div');
+  hint.className = 'date-hint';
+
+  container.append(startInput.wrap, sep, endInput.wrap, hint);
+
+  function createMonthDayInput(label: string): MonthDayInput {
+    const wrap = document.createElement('div');
+    wrap.className = 'date-input-wrap';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'date-input';
+    input.readOnly = true;
+    input.setAttribute('aria-label', label);
+
+    wrap.appendChild(input);
+    return { wrap, input, label };
+  }
+
+  function notify() {
+    if (!startInput.fp || !endInput.fp) return;
+    const sDate = startInput.fp.selectedDates[0];
+    const eDate = endInput.fp.selectedDates[0];
+    if (!sDate || !eDate) return;
+    const sMd = getMonthDayFromDate(formatDateFromJsDate(sDate));
+    const eMd = getMonthDayFromDate(formatDateFromJsDate(eDate));
+    const isWrap = sMd > eMd;
+    hint.textContent = isWrap ? '已选择跨年区间：将对比每年该时段（起始年→次年）' : '';
+    hint.classList.toggle('date-hint--info', isWrap);
+    onChange(sMd, eMd);
+  }
+
+  function initFlatpickr(input: HTMLInputElement, defaultDate: string) {
+    return flatpickr(input, {
       locale: Mandarin,
       dateFormat: 'm-d',
-      defaultDate: [defaultRange.start, defaultRange.end],
+      defaultDate: monthDayToDate(defaultDate),
       allowInput: false,
       clickOpens: true,
-      static: true,
-      onChange: (selectedDates) => {
-        if (selectedDates.length === 2) {
-          const sMd = getMonthDayFromDate(formatDateFromJsDate(selectedDates[0]));
-          const eMd = getMonthDayFromDate(formatDateFromJsDate(selectedDates[1]));
-          if (!validateMonthDayRange(sMd, eMd)) {
-            errorMsg.textContent = '已选择跨年区间：将对比每年该时段（起始年→次年）';
-            errorMsg.classList.remove('date-error-invalid');
-            errorMsg.classList.add('date-error-info');
-          } else {
-            errorMsg.textContent = '';
-            errorMsg.classList.remove('date-error-info', 'date-error-invalid');
-          }
-          input.value = `${sMd} 至 ${eMd}`;
-          onChange(sMd, eMd);
-        }
-      },
+      static: false,
+      onChange: () => notify(),
     });
-  };
+  }
 
-  // 用 requestAnimationFrame 等待挂载完成（container 被 appendChild 到 DOM 后）
+  // 延迟到挂载 DOM 后初始化
   requestAnimationFrame(() => {
-    if (document.contains(input)) {
-      initFlatpickr();
+    if (document.contains(container)) {
+      startInput.fp = initFlatpickr(startInput.input, defaultRange.start);
+      endInput.fp = initFlatpickr(endInput.input, defaultRange.end);
+      notify();
     } else {
-      // 兜底：MutationObserver 监听挂载
       const obs = new MutationObserver(() => {
-        if (document.contains(input)) {
+        if (document.contains(container)) {
           obs.disconnect();
-          initFlatpickr();
+          startInput.fp = initFlatpickr(startInput.input, defaultRange.start);
+          endInput.fp = initFlatpickr(endInput.input, defaultRange.end);
+          notify();
         }
       });
       obs.observe(document.body, { childList: true, subtree: true });
     }
   });
-
-  // 初始通知
-  onChange(startMd, endMd);
 
   return container;
 }
@@ -90,3 +110,4 @@ function formatDateFromJsDate(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+

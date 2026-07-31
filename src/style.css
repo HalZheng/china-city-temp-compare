@@ -162,15 +162,20 @@ body {
   gap: 8px;
 }
 
+.date-input-wrap {
+  flex: 1;
+  min-width: 120px;
+}
+
 .date-input {
+  width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 15px;
   background: var(--surface);
   color: var(--text);
-  flex: 1;
-  min-width: 130px;
+  box-sizing: border-box;
 }
 
 .date-input:focus {
@@ -183,13 +188,13 @@ body {
   white-space: nowrap;
 }
 
-.date-error {
-  color: var(--error);
-  font-size: 13px;
+.date-hint {
   width: 100%;
+  font-size: 13px;
+  color: var(--error);
 }
 
-.date-error-info {
+.date-hint--info {
   color: var(--accent);
 }
 
