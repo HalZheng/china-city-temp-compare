@@ -60,7 +60,7 @@ function applyTheme(mode: ThemeMode): void {
     document.documentElement.setAttribute('data-theme', mode);
   }
   localStorage.setItem('theme', mode);
-  themeToggle.innerHTML = `<span class="icon-theme">${THEME_ICON[mode]}</span>`;
+  themeToggle.innerHTML = `<span class="icon-theme">${THEME_ICON[mode]}</span><span class="label-theme">${THEME_LABEL[mode]}</span>`;
   themeToggle.title = `当前：${THEME_LABEL[mode]}（点击切换）`;
   // 通知图表重绘（读取新 CSS 变量值）
   onThemeChange();

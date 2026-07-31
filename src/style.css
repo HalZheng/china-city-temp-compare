@@ -14,6 +14,24 @@
   /* 主题切换图标颜色 */
   --icon: #6b7280;
 
+  /* Shoelace 组件变量映射到项目主题（避免弹出面板透明/颜色不跟随主题） */
+  --sl-panel-background-color: var(--surface);
+  --sl-panel-border-color: var(--border);
+  --sl-color-neutral-0: #ffffff;
+  --sl-color-neutral-50: #f9fafb;
+  --sl-color-neutral-100: #f3f4f6;
+  --sl-color-neutral-200: #e5e7eb;
+  --sl-color-neutral-300: #d1d5db;
+  --sl-color-neutral-400: #9ca3af;
+  --sl-color-neutral-500: #6b7280;
+  --sl-color-neutral-600: #4b5563;
+  --sl-color-neutral-700: #374151;
+  --sl-color-neutral-800: #1f2937;
+  --sl-color-neutral-900: #111827;
+  --sl-color-neutral-950: #030712;
+  --sl-color-primary-600: var(--accent);
+  --sl-color-primary-700: var(--accent-hover);
+
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
@@ -38,6 +56,25 @@
     --shadow:
       0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
     --icon: #94a3b8;
+
+    /* Shoelace 深色变量 */
+    --sl-panel-background-color: var(--surface);
+    --sl-panel-border-color: var(--border);
+    --sl-color-neutral-0: #020617;
+    --sl-color-neutral-50: #0f172a;
+    --sl-color-neutral-100: #1e293b;
+    --sl-color-neutral-200: #334155;
+    --sl-color-neutral-300: #475569;
+    --sl-color-neutral-400: #64748b;
+    --sl-color-neutral-500: #94a3b8;
+    --sl-color-neutral-600: #cbd5e1;
+    --sl-color-neutral-700: #e2e8f0;
+    --sl-color-neutral-800: #f1f5f9;
+    --sl-color-neutral-900: #f8fafc;
+    --sl-color-neutral-950: #ffffff;
+    --sl-color-primary-600: var(--accent);
+    --sl-color-primary-700: var(--accent-hover);
+
     color-scheme: dark;
   }
 }
@@ -56,6 +93,25 @@
   --shadow:
     0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
   --icon: #94a3b8;
+
+  /* Shoelace 深色变量 */
+  --sl-panel-background-color: var(--surface);
+  --sl-panel-border-color: var(--border);
+  --sl-color-neutral-0: #020617;
+  --sl-color-neutral-50: #0f172a;
+  --sl-color-neutral-100: #1e293b;
+  --sl-color-neutral-200: #334155;
+  --sl-color-neutral-300: #475569;
+  --sl-color-neutral-400: #64748b;
+  --sl-color-neutral-500: #94a3b8;
+  --sl-color-neutral-600: #cbd5e1;
+  --sl-color-neutral-700: #e2e8f0;
+  --sl-color-neutral-800: #f1f5f9;
+  --sl-color-neutral-900: #f8fafc;
+  --sl-color-neutral-950: #ffffff;
+  --sl-color-primary-600: var(--accent);
+  --sl-color-primary-700: var(--accent-hover);
+
   color-scheme: dark;
 }
 
@@ -634,17 +690,18 @@ body {
   position: absolute;
   top: 24px;
   right: 24px;
-  width: 38px;
   height: 38px;
-  border-radius: 50%;
+  padding: 0 14px;
+  border-radius: 19px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--icon);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  gap: 6px;
+  font-size: 14px;
   line-height: 1;
   transition: background 0.2s, color 0.2s, border-color 0.2s;
   z-index: 10;
@@ -657,7 +714,18 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.theme-toggle .icon-theme { display: inline; }
+.theme-toggle .icon-theme { font-size: 16px; }
+.theme-toggle .label-theme { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .theme-toggle {
+    top: 12px;
+    right: 12px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .theme-toggle .label-theme { display: none; }
+}
 
 /* ===== 加载骨架屏 =====
    加载数据时为各区域提供占位，避免内容区"display:none"导致的页面高度跳变。
@@ -724,10 +792,13 @@ body {
 /* ===== flatpickr 日历夜间模式适配 =====
    flatpickr 默认浅色，通过覆盖其内部 CSS 类适配夜间模式。
    选择器同时覆盖 [data-theme="dark"] 和系统偏好（无手动 light 时）。 */
-.flatpickr-calendar {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
+.flatpickr-calendar,
+[data-theme="dark"] .flatpickr-calendar,
+:root:not([data-theme="light"]) .flatpickr-calendar {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--text) !important;
 }
 .flatpickr-calendar.static {
   position: static;
@@ -740,60 +811,101 @@ body {
 }
 .flatpickr-months .flatpickr-month,
 .flatpickr-current-month,
-.flatpickr-weekday {
-  color: var(--text-h);
-  fill: var(--text);
+.flatpickr-weekday,
+[data-theme="dark"] .flatpickr-months .flatpickr-month,
+[data-theme="dark"] .flatpickr-current-month,
+[data-theme="dark"] .flatpickr-weekday,
+:root:not([data-theme="light"]) .flatpickr-months .flatpickr-month,
+:root:not([data-theme="light"]) .flatpickr-current-month,
+:root:not([data-theme="light"]) .flatpickr-weekday {
+  color: var(--text-h) !important;
+  fill: var(--text) !important;
 }
-.flatpickr-current-month input.cur-year {
-  color: var(--text-h);
+.flatpickr-current-month input.cur-year,
+[data-theme="dark"] .flatpickr-current-month input.cur-year,
+:root:not([data-theme="light"]) .flatpickr-current-month input.cur-year {
+  color: var(--text-h) !important;
 }
-.flatpickr-day {
-  color: var(--text);
-  border-color: var(--border);
+.flatpickr-day,
+[data-theme="dark"] .flatpickr-day,
+:root:not([data-theme="light"]) .flatpickr-day {
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+  background: transparent !important;
 }
-.flatpickr-day:hover {
-  background: var(--surface-2);
-  border-color: var(--surface-2);
+.flatpickr-day:hover,
+[data-theme="dark"] .flatpickr-day:hover,
+:root:not([data-theme="light"]) .flatpickr-day:hover {
+  background: var(--surface-2) !important;
+  border-color: var(--surface-2) !important;
 }
 .flatpickr-day.selected,
 .flatpickr-day.startRange,
 .flatpickr-day.endRange,
 .flatpickr-day.selected.inRange,
 .flatpickr-day.startRange.inRange,
-.flatpickr-day.endRange.inRange {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+.flatpickr-day.endRange.inRange,
+[data-theme="dark"] .flatpickr-day.selected,
+[data-theme="dark"] .flatpickr-day.startRange,
+[data-theme="dark"] .flatpickr-day.endRange,
+:root:not([data-theme="light"]) .flatpickr-day.selected,
+:root:not([data-theme="light"]) .flatpickr-day.startRange,
+:root:not([data-theme="light"]) .flatpickr-day.endRange {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
 }
-.flatpickr-day.inRange {
-  background: var(--accent-bg);
-  border-color: var(--accent-bg);
-  box-shadow: -5px 0 0 var(--accent-bg), 5px 0 0 var(--accent-bg);
+.flatpickr-day.inRange,
+[data-theme="dark"] .flatpickr-day.inRange,
+:root:not([data-theme="light"]) .flatpickr-day.inRange {
+  background: var(--accent-bg) !important;
+  border-color: var(--accent-bg) !important;
+  box-shadow: -5px 0 0 var(--accent-bg), 5px 0 0 var(--accent-bg) !important;
 }
 .flatpickr-day.flatpickr-disabled,
 .flatpickr-day.prevMonthDay,
-.flatpickr-day.nextMonthDay {
-  color: var(--text);
-  opacity: 0.4;
+.flatpickr-day.nextMonthDay,
+[data-theme="dark"] .flatpickr-day.flatpickr-disabled,
+[data-theme="dark"] .flatpickr-day.prevMonthDay,
+[data-theme="dark"] .flatpickr-day.nextMonthDay,
+:root:not([data-theme="light"]) .flatpickr-day.flatpickr-disabled,
+:root:not([data-theme="light"]) .flatpickr-day.prevMonthDay,
+:root:not([data-theme="light"]) .flatpickr-day.nextMonthDay {
+  color: var(--text) !important;
+  opacity: 0.4 !important;
 }
-.flatpickr-monthSelect-month {
-  color: var(--text);
+.flatpickr-monthSelect-month,
+[data-theme="dark"] .flatpickr-monthSelect-month,
+:root:not([data-theme="light"]) .flatpickr-monthSelect-month {
+  color: var(--text) !important;
 }
-.flatpickr-monthSelect-month.inRange {
-  background: var(--accent-bg);
-  color: var(--text);
+.flatpickr-monthSelect-month.inRange,
+[data-theme="dark"] .flatpickr-monthSelect-month.inRange,
+:root:not([data-theme="light"]) .flatpickr-monthSelect-month.inRange {
+  background: var(--accent-bg) !important;
+  color: var(--text) !important;
 }
-span.flatpickr-weekday {
-  color: var(--text);
+span.flatpickr-weekday,
+[data-theme="dark"] span.flatpickr-weekday,
+:root:not([data-theme="light"]) span.flatpickr-weekday {
+  color: var(--text) !important;
 }
 .flatpickr-prev-month,
-.flatpickr-next-month {
-  fill: var(--text);
-  color: var(--text);
+.flatpickr-next-month,
+[data-theme="dark"] .flatpickr-prev-month,
+[data-theme="dark"] .flatpickr-next-month,
+:root:not([data-theme="light"]) .flatpickr-prev-month,
+:root:not([data-theme="light"]) .flatpickr-next-month {
+  fill: var(--text) !important;
+  color: var(--text) !important;
 }
 .flatpickr-prev-month:hover svg,
-.flatpickr-next-month:hover svg {
-  fill: var(--accent);
+.flatpickr-next-month:hover svg,
+[data-theme="dark"] .flatpickr-prev-month:hover svg,
+[data-theme="dark"] .flatpickr-next-month:hover svg,
+:root:not([data-theme="light"]) .flatpickr-prev-month:hover svg,
+:root:not([data-theme="light"]) .flatpickr-next-month:hover svg {
+  fill: var(--accent) !important;
 }
 
 /* 骨架屏夜间模式：基础 skeleton 用变量适配 */
