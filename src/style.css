@@ -3,6 +3,7 @@
   --text-h: #111827;
   --bg: #f9fafb;
   --surface: #ffffff;
+  --surface-2: #f3f4f6;
   --border: #e5e7eb;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
@@ -10,12 +11,52 @@
   --error: #dc2626;
   --shadow:
     0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  /* 主题切换图标颜色 */
+  --icon: #6b7280;
 
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
   color: var(--text);
   background: var(--bg);
+  color-scheme: light;
+}
+
+/* 夜间模式：通过 [data-theme="dark"] 或系统偏好（无手动切换时）激活 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --text: #cbd5e1;
+    --text-h: #f1f5f9;
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --border: #334155;
+    --accent: #60a5fa;
+    --accent-hover: #93c5fd;
+    --accent-bg: rgba(96, 165, 250, 0.15);
+    --error: #f87171;
+    --shadow:
+      0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --icon: #94a3b8;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --text: #cbd5e1;
+  --text-h: #f1f5f9;
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #334155;
+  --border: #334155;
+  --accent: #60a5fa;
+  --accent-hover: #93c5fd;
+  --accent-bg: rgba(96, 165, 250, 0.15);
+  --error: #f87171;
+  --shadow:
+    0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --icon: #94a3b8;
+  color-scheme: dark;
 }
 
 * {
@@ -583,6 +624,46 @@ body {
   vertical-align: middle;
 }
 
+/* ===== 主题切换按钮 ===== */
+.theme-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--icon);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  z-index: 10;
+}
+.theme-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text-h);
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 图标显隐：默认显示太阳（点击切到夜间），夜间模式显示月亮 */
+.theme-toggle .icon-sun { display: inline; }
+.theme-toggle .icon-moon { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-sun,
+:root:not([data-theme="light"]) .theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-moon,
+:root:not([data-theme="light"]) .theme-toggle .icon-moon { display: inline; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .theme-toggle .icon-sun { display: inline; }
+  :root:not([data-theme="dark"]) .theme-toggle .icon-moon { display: none; }
+}
+
 /* ===== 加载骨架屏 =====
    加载数据时为各区域提供占位，避免内容区"display:none"导致的页面高度跳变。
    真实内容渲染完成后，骨架 display:none、对应内容容器 display:block。 */
@@ -640,7 +721,91 @@ body {
   right: 16px;
   top: 16px;
   bottom: 16px;
-  background-image: linear-gradient(transparent 30px, #f3f4f6 30px, #f3f4f6 36px);
+  background-image: linear-gradient(transparent 30px, var(--surface-2) 30px, var(--surface-2) 36px);
   background-size: 100% 36px;
   border-radius: 4px;
+}
+
+/* ===== flatpickr 日历夜间模式适配 =====
+   flatpickr 默认浅色，通过覆盖其内部 CSS 类适配夜间模式。
+   选择器同时覆盖 [data-theme="dark"] 和系统偏好（无手动 light 时）。 */
+.flatpickr-calendar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.flatpickr-calendar.static {
+  position: static;
+}
+.flatpickr-calendar.arrowTop::before,
+.flatpickr-calendar.arrowTop::after,
+.flatpickr-calendar.arrowBottom::before,
+.flatpickr-calendar.arrowBottom::after {
+  border-bottom-color: var(--border);
+}
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month,
+.flatpickr-weekday {
+  color: var(--text-h);
+  fill: var(--text);
+}
+.flatpickr-current-month input.cur-year {
+  color: var(--text-h);
+}
+.flatpickr-day {
+  color: var(--text);
+  border-color: var(--border);
+}
+.flatpickr-day:hover {
+  background: var(--surface-2);
+  border-color: var(--surface-2);
+}
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange,
+.flatpickr-day.selected.inRange,
+.flatpickr-day.startRange.inRange,
+.flatpickr-day.endRange.inRange {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.flatpickr-day.inRange {
+  background: var(--accent-bg);
+  border-color: var(--accent-bg);
+  box-shadow: -5px 0 0 var(--accent-bg), 5px 0 0 var(--accent-bg);
+}
+.flatpickr-day.flatpickr-disabled,
+.flatpickr-day.prevMonthDay,
+.flatpickr-day.nextMonthDay {
+  color: var(--text);
+  opacity: 0.4;
+}
+.flatpickr-monthSelect-month {
+  color: var(--text);
+}
+.flatpickr-monthSelect-month.inRange {
+  background: var(--accent-bg);
+  color: var(--text);
+}
+span.flatpickr-weekday {
+  color: var(--text);
+}
+.flatpickr-prev-month,
+.flatpickr-next-month {
+  fill: var(--text);
+  color: var(--text);
+}
+.flatpickr-prev-month:hover svg,
+.flatpickr-next-month:hover svg {
+  fill: var(--accent);
+}
+
+/* 骨架屏夜间模式：基础 skeleton 用变量适配 */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--border) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+}
+.skeleton-chart::after {
+  filter: brightness(0.8);
 }

@@ -13,7 +13,11 @@
     "vite": "^8.1.1"
   },
   "dependencies": {
-    "echarts": "^6.1.0"
+    "@shoelace-style/shoelace": "^2.20.1",
+    "china-division": "^2.7.0",
+    "echarts": "^6.1.0",
+    "flatpickr": "^4.6.13",
+    "pinyin-pro": "^3.28.2"
   },
   "engines": {
     "node": ">=20.19.0"

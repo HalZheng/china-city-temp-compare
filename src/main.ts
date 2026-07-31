@@ -1,6 +1,6 @@
 import './style.css';
 import type { City, AppState, TempType, YearlyData } from './types';
-import { CitySearch } from './components/CitySearch';
+import { CascaderCitySearch } from './components/CascaderCitySearch';
 import { DateRangePicker } from './components/DateRangePicker';
 import { YearSelector } from './components/YearSelector';
 import { TempChart } from './components/TempChart';
@@ -42,11 +42,34 @@ title.textContent = '中国城市历年气温对比';
 header.appendChild(title);
 app.appendChild(header);
 
+// 主题切换按钮：跟随系统偏好初始化，点击在 light/dark 间切换
+const themeToggle = document.createElement('button');
+themeToggle.type = 'button';
+themeToggle.className = 'theme-toggle';
+themeToggle.title = '切换主题';
+themeToggle.setAttribute('aria-label', '切换主题');
+themeToggle.innerHTML = '<span class="icon-sun">☀</span><span class="icon-moon">☾</span>';
+// 读取 localStorage 持久化的手动选择，否则跟随系统
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'dark' || savedTheme === 'light') {
+  document.documentElement.setAttribute('data-theme', savedTheme);
+}
+themeToggle.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme');
+  // 计算当前实际生效主题（考虑系统偏好）
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const isDark = current ? current === 'dark' : prefersDark;
+  const next = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+});
+app.appendChild(themeToggle);
+
 // Controls
 const controls = document.createElement('section');
 controls.className = 'controls';
 
-const citySearch = CitySearch({
+const citySearch = CascaderCitySearch({
   onSelect: (city) => {
     state.city = city;
   },
