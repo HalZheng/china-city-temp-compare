@@ -112,12 +112,12 @@ function setTempType(type: TempType) {
   }
   if (state.yearlyData.length > 0) {
     const avgLine = multiYearDailyAverage(state.yearlyData, currentLabels, state.tempType);
-    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine);
     const heatwaves = detectHeatwaves(state.yearlyData, currentLabels);
     const coldWaves = detectColdWaves(state.yearlyData, currentLabels);
     const summary = buildSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
     const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
-    statsCards.update(summary, yearAverages, state.tempType, currentYearColors);
+    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine, yearAverages);
+    statsCards.update(summary, state.tempType);
     extremeCards.update(heatwaves, coldWaves, currentYearColors);
   }
 }
@@ -378,9 +378,9 @@ async function handleQuery() {
     const summary = buildSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
     const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
 
-    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine);
+    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine, yearAverages);
     dataTable.update(state.yearlyData, currentLabels);
-    statsCards.update(summary, yearAverages, state.tempType, currentYearColors);
+    statsCards.update(summary, state.tempType);
     extremeCards.update(heatwaves, coldWaves, currentYearColors);
   }
 

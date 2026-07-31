@@ -19,7 +19,7 @@ interface TempChartProps {
 type EChartsInstance = ReturnType<typeof echarts.init>;
 
 export function TempChart({ container }: TempChartProps): {
-  update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[], averageLine?: (number | null)[]) => void;
+  update: (data: YearlyData[], tempType: TempType, colors: Record<number, string>, cityName: string, labels: string[], averageLine?: (number | null)[], yearAverages?: { year: number; average: number | null }[]) => void;
   destroy: () => void;
 } {
   const wrapper = document.createElement('div');
@@ -163,8 +163,14 @@ export function TempChart({ container }: TempChartProps): {
     series: any[],
     colors: Record<number, string>,
     selected: Record<string, boolean>,
+    yearAverages?: { year: number; average: number | null }[],
   ): echarts.EChartsCoreOption {
     const tempLabel = tempType === 'max' ? '最高气温对比' : '最低气温对比';
+    // 图例副标题：说明图例中温度数值的含义（跟随 tempType 切换）
+    const legendCaption = tempType === 'max' ? '区间最高气温均值' : '区间最低气温均值';
+    // 年份 -> 区间均值映射，供 legend formatter 查询
+    const avgMap: Record<number, number | null> = {};
+    if (yearAverages) for (const ya of yearAverages) avgMap[ya.year] = ya.average;
     return {
       // 图例显隐属于"更新"操作，走 animationDurationUpdate -> 精致过渡动画；
       // 全量重建(查询/切类型, notMerge:true)使用 animationDuration:0，避免整图入场抖动
@@ -176,9 +182,12 @@ export function TempChart({ container }: TempChartProps): {
       backgroundColor: 'transparent',
       title: {
         text: `${cityName} · ${tempLabel}`,
+        subtext: legendCaption,
         top: 8,
         left: 'center',
         textStyle: { fontSize: 15, color: '#111827', fontWeight: 500 },
+        subtextStyle: { fontSize: 11, color: '#6b7280' },
+        itemGap: 4,
       },
       tooltip: {
         trigger: 'axis',
@@ -189,13 +198,29 @@ export function TempChart({ container }: TempChartProps): {
       },
       legend: {
         type: 'scroll',
-        top: 44,
+        top: 64,
         left: 'center',
         selectedMode: true,
         selected,
         itemWidth: 14,
         itemHeight: 8,
-        textStyle: { fontSize: 12, color: '#374151' },
+        // 图例项两行显示：首行年份（深色），次行区间均值（浅色小字）。
+        // 「多年平均」项保持单行原样。rich 文本为两行提供独立 lineHeight。
+        formatter: (name: string) => {
+          if (name === '多年平均') return name;
+          const y = parseYearFromName(name);
+          if (Number.isNaN(y)) return name;
+          const avg = avgMap[y];
+          return `{year|${name}}\n{temp|${avg != null ? avg.toFixed(1) + '℃' : '—'}}`;
+        },
+        textStyle: {
+          fontSize: 12,
+          color: '#374151',
+          rich: {
+            year: { fontSize: 12, color: '#374151', lineHeight: 14 },
+            temp: { fontSize: 11, color: '#6b7280', lineHeight: 14 },
+          },
+        },
       },
       toolbox: {
         right: 12,
@@ -209,7 +234,8 @@ export function TempChart({ container }: TempChartProps): {
           },
         },
       },
-      grid: { top: 92, left: 56, right: 28, bottom: 48, containLabel: false },
+      // 图例两行 + 副标题占用更多顶部空间，grid.top 相应下调
+      grid: { top: 116, left: 56, right: 28, bottom: 48, containLabel: false },
       xAxis: {
         type: 'category',
         data: labels,
@@ -243,6 +269,7 @@ export function TempChart({ container }: TempChartProps): {
     cityName: string,
     labels: string[],
     averageLine?: (number | null)[],
+    yearAverages?: { year: number; average: number | null }[],
   ) {
     if (data.length === 0) return;
 
@@ -255,7 +282,7 @@ export function TempChart({ container }: TempChartProps): {
       else selected[s.name] = !hiddenYears.has(parseYearFromName(s.name));
     }
 
-    const option = buildOption(cityName, tempType, labels, series, colors, selected);
+    const option = buildOption(cityName, tempType, labels, series, colors, selected, yearAverages);
 
     ensureInit();
     // notMerge 保证查询年份变化时不会残留旧系列

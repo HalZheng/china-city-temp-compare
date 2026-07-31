@@ -1,18 +1,18 @@
-import type { SummaryStats, TempType, YearAverage } from '../types';
+import type { SummaryStats, TempType } from '../types';
 
 interface StatsCardsProps {
   container: HTMLElement;
 }
 
 export function StatsCards({ container }: StatsCardsProps): {
-  update: (summary: SummaryStats, yearAverages: YearAverage[], tempType: TempType, colors?: Record<number, string>) => void;
+  update: (summary: SummaryStats, tempType: TempType) => void;
   clear: () => void;
 } {
   const wrapper = document.createElement('div');
   wrapper.className = 'stats-section';
   container.appendChild(wrapper);
 
-  function update(summary: SummaryStats, yearAverages: YearAverage[], tempType: TempType, colors?: Record<number, string>) {
+  function update(summary: SummaryStats, tempType: TempType) {
     wrapper.innerHTML = '';
     if (!summary) return;
 
@@ -29,25 +29,6 @@ export function StatsCards({ container }: StatsCardsProps): {
     bar.appendChild(statCard('冰冻日 (≤0℃)', String(summary.freezingDays), 'cold'));
     bar.appendChild(statCard('极端寒夜 (≤-5℃)', String(summary.extremeColdNights), 'cold'));
     wrapper.appendChild(bar);
-
-    const strip = document.createElement('div');
-    strip.className = `year-avg-strip year-avg-strip--${tempType === 'max' ? 'warm' : 'cold'}`;
-    const title = document.createElement('span');
-    title.className = 'year-avg-title';
-    title.textContent = `区间${tempLabel}均值：`;
-    strip.appendChild(title);
-    yearAverages.forEach((ya) => {
-      const chip = document.createElement('span');
-      chip.className = 'year-avg-chip';
-      chip.innerHTML = `<b>${ya.year}</b> <span class="year-avg-val">${fmt(ya.average)}</span>`;
-      // 年份用图表图例分配给该年的颜色；平均温度用平均线(多年平均)的颜色 #6b7280
-      const yearEl = chip.querySelector('b') as HTMLElement | null;
-      if (yearEl) yearEl.style.color = colors?.[ya.year] || 'var(--text-h)';
-      const valEl = chip.querySelector('.year-avg-val') as HTMLElement | null;
-      if (valEl) valEl.style.color = '#6b7280';
-      strip.appendChild(chip);
-    });
-    wrapper.appendChild(strip);
   }
 
   function clear() {
