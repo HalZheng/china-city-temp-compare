@@ -104,7 +104,7 @@ export function TempChart({ container }: TempChartProps): {
         name: yearName,
         type: 'line',
         data: histData,
-        smooth: true,
+        smooth: false,
         showSymbol: true,
         symbol: 'circle',
         symbolSize: 3,
@@ -128,7 +128,7 @@ export function TempChart({ container }: TempChartProps): {
           name: yearName,
           type: 'line',
           data: fcData,
-          smooth: true,
+          smooth: false,
           showSymbol: true,
           symbol: 'diamond',
           symbolSize: 4,
@@ -146,7 +146,7 @@ export function TempChart({ container }: TempChartProps): {
         name: '多年平均',
         type: 'line',
         data: averageLine.map((t) => (t === null ? null : Number(t.toFixed(1)))),
-        smooth: true,
+        smooth: false,
         showSymbol: false,
         connectNulls: false,
         lineStyle: { type: 'dashed', color: getCssVar('--icon') || '#6b7280', width: 2 },
@@ -182,9 +182,9 @@ export function TempChart({ container }: TempChartProps): {
     const cBorder = getCssVar('--border') || '#e5e7eb';
     const cSurface = getCssVar('--surface') || '#ffffff';
 
-    // 图例项：左侧说明文字 + 各年份 + 多年平均（说明文字作为图例第一项参与整体居中）
+    // 图例只包含真实系列；均值口径作为标题副文案，避免伪系列触发 ECharts 告警。
     const yearNames = data.map((yd) => `${yd.year}`);
-    const legendData: any[] = [{ name: legendCaption, icon: 'none' }, ...yearNames];
+    const legendData: any[] = [...yearNames];
     if (averageLine) legendData.push('多年平均');
 
     return {
@@ -198,9 +198,11 @@ export function TempChart({ container }: TempChartProps): {
       backgroundColor: 'transparent',
       title: {
         text: `${cityName} · ${tempLabel}`,
+        subtext: legendCaption,
         top: 8,
         left: 'center',
         textStyle: { fontSize: 15, color: cTextH, fontWeight: 500 },
+        subtextStyle: { fontSize: 12, color: cMuted },
       },
       tooltip: {
         trigger: 'axis',
@@ -215,13 +217,12 @@ export function TempChart({ container }: TempChartProps): {
         left: 'center',
         data: legendData,
         selectedMode: 'multiple',
-        selected: { [legendCaption]: true, ...selected },
+        selected,
         itemWidth: 22,
         itemHeight: 10,
         // 图例项两行显示：首行年份（深色），次行区间均值（浅色小字）。
         // 左侧说明文字项作为无图标的第一项，与年份图例整体居中。
         formatter: (name: string) => {
-          if (name === legendCaption) return `{caption|${name}}`;
           if (name === '多年平均') return name;
           const y = parseYearFromName(name);
           if (Number.isNaN(y)) return name;
@@ -232,7 +233,6 @@ export function TempChart({ container }: TempChartProps): {
           fontSize: 14,
           color: cText,
           rich: {
-            caption: { fontSize: 14, color: cText, lineHeight: 18, padding: [0, 8, 0, 0] },
             year: { fontSize: 14, color: cText, lineHeight: 18, width: 42, align: 'left' },
             temp: { fontSize: 13, color: cMuted, lineHeight: 18, width: 54, align: 'left' },
           },

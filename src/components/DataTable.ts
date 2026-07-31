@@ -22,6 +22,9 @@ export function DataTable({ container }: DataTableProps): { update: (data: Yearl
 
     const table = document.createElement('table');
     table.className = 'data-table';
+    const caption = document.createElement('caption');
+    caption.textContent = '单位：℃；每格为最高 / 最低；“预”表示预报数据';
+    table.appendChild(caption);
 
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
@@ -46,7 +49,7 @@ export function DataTable({ container }: DataTableProps): { update: (data: Yearl
         divider.className = 'year-divider';
         const td = document.createElement('td');
         td.colSpan = colCount;
-        td.textContent = '— 以下为次年 1–2 月（所选年份的冬季跨年段） —';
+        td.textContent = '— 以下为所选年份的次年跨年段 —';
         divider.appendChild(td);
         tbody.appendChild(divider);
       }
@@ -61,14 +64,17 @@ export function DataTable({ container }: DataTableProps): { update: (data: Yearl
         const td = document.createElement('td');
         const maxT = yearData.maxTemps[i];
         const minT = yearData.minTemps[i];
-        if (typeof maxT === 'number' && typeof minT === 'number') {
-          const maxColor = getTemperatureColor(maxT);
-          const minColor = getTemperatureColor(minT);
-          const maxStyle = maxColor ? `color:${maxColor};font-weight:600;` : 'color:var(--text);';
-          const minStyle = minColor ? `color:${minColor};font-weight:600;` : 'color:var(--text);';
-          td.innerHTML = `<span style="${maxStyle}">${maxT.toFixed(1)}</span><span style="color:var(--icon);margin:0 2px;">/</span><span style="${minStyle}">${minT.toFixed(1)}</span>`;
-        } else {
-          td.textContent = '-';
+        td.appendChild(temperatureValue(maxT));
+        const separator = document.createElement('span');
+        separator.className = 'temperature-separator';
+        separator.textContent = '/';
+        td.appendChild(separator);
+        td.appendChild(temperatureValue(minT));
+        if (yearData.forecastFlags[i]) {
+          const badge = document.createElement('span');
+          badge.className = 'badge-forecast badge-forecast--compact';
+          badge.textContent = '预';
+          td.appendChild(badge);
         }
         tr.appendChild(td);
       });
@@ -86,4 +92,20 @@ export function DataTable({ container }: DataTableProps): { update: (data: Yearl
   }
 
   return { update, clear };
+}
+
+function temperatureValue(value: number | null): HTMLSpanElement {
+  const span = document.createElement('span');
+  if (value === null) {
+    span.textContent = '—';
+    span.className = 'temperature-missing';
+    return span;
+  }
+  span.textContent = value.toFixed(1);
+  const color = getTemperatureColor(value);
+  if (color) {
+    span.style.color = color;
+    span.style.fontWeight = '600';
+  }
+  return span;
 }

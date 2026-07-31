@@ -5,10 +5,10 @@ import { DateRangePicker } from './components/DateRangePicker';
 import { YearSelector } from './components/YearSelector';
 import { TempChart } from './components/TempChart';
 import { DataTable } from './components/DataTable';
-import { fetchHistoricalWeather, fetchForecastWeather, reverseGeocode } from './api/open-meteo';
+import { fetchHistoricalWeather, fetchForecastWeather, reverseGeocode, searchCities } from './api/open-meteo';
 import { formatDate, buildMonthDayLabels, isWrappingRange, assignColorsByAverageTemp, getDefaultDateRange, getRecentYears } from './utils/helpers';
 import { detectHeatwaves, detectColdWaves } from './logic/extremes';
-import { buildSummaryStats, buildYearAverages, multiYearDailyAverage } from './logic/stats';
+import { buildYearAverages, buildYearSummaryStats, multiYearDailyAverage } from './logic/stats';
 import { StatsCards } from './components/StatsCards';
 import { ExtremeCards } from './components/ExtremeCards';
 
@@ -32,6 +32,9 @@ const state: AppState = {
 
 let currentYearColors: Record<number, string> = {};
 let currentLabels: string[] = [];
+let currentCityName = defaultCity.name;
+let activeQueryController: AbortController | null = null;
+let querySequence = 0;
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = '';
@@ -85,9 +88,11 @@ app.appendChild(themeToggle);
 // Controls
 const controls = document.createElement('section');
 controls.className = 'controls';
+let citySelectedByUser = false;
 
 const citySearch = CascaderCitySearch({
   onSelect: (city) => {
+    citySelectedByUser = true;
     state.city = city;
   },
   defaultCity,
@@ -98,6 +103,7 @@ function initGeolocation() {
   if (!('geolocation' in navigator)) return;
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
+      if (citySelectedByUser) return;
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       try {
@@ -113,6 +119,7 @@ function initGeolocation() {
         const normalizedCity = citySearch.update(currentCity);
         defaultCity = normalizedCity;
         state.city = normalizedCity;
+        void handleQuery();
       } catch {
         const currentCity: City = {
           name: '当前位置',
@@ -122,6 +129,7 @@ function initGeolocation() {
         const normalizedCity = citySearch.update(currentCity);
         defaultCity = normalizedCity;
         state.city = normalizedCity;
+        void handleQuery();
       }
     },
     () => {
@@ -162,8 +170,8 @@ controls.appendChild(queryBtn);
 app.appendChild(controls);
 
 // 先应用 URL 参数；若 URL 已指定城市，则不再请求当前位置
-applyUrlParams();
-if (!new URLSearchParams(location.search).has('city')) {
+const hasUrlCity = await applyUrlParams();
+if (!hasUrlCity) {
   initGeolocation();
 }
 
@@ -204,10 +212,10 @@ function setTempType(type: TempType) {
     const avgLine = multiYearDailyAverage(state.yearlyData, currentLabels, state.tempType);
     const heatwaves = detectHeatwaves(state.yearlyData, currentLabels);
     const coldWaves = detectColdWaves(state.yearlyData, currentLabels);
-    const summary = buildSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
+    const summaries = buildYearSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
     const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
-    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine, yearAverages);
-    statsCards.update(summary, state.tempType);
+    chart.update(state.yearlyData, state.tempType, currentYearColors, currentCityName, currentLabels, avgLine, yearAverages);
+    statsCards.update(summaries, state.tempType, currentYearColors);
     extremeCards.update(heatwaves, coldWaves, currentYearColors);
   }
 }
@@ -236,12 +244,7 @@ statsSection.className = 'stats-container';
 app.appendChild(statsSection);
 // 骨架屏：8 张占位卡片，与 StatsCards 实际卡片数量一致
 const statsSkeleton = document.createElement('div');
-statsSkeleton.className = 'skeleton-row';
-for (let i = 0; i < 8; i++) {
-  const c = document.createElement('div');
-  c.className = 'skeleton skeleton-card';
-  statsSkeleton.appendChild(c);
-}
+statsSkeleton.className = 'skeleton skeleton-table skeleton-table--stats';
 statsSection.appendChild(statsSkeleton);
 // 真实内容容器：加载时 display:none 隐藏旧值，加载完成后显示
 const statsContent = document.createElement('div');
@@ -312,7 +315,7 @@ app.appendChild(footer);
 const messageEl = document.createElement('div');
 messageEl.className = 'message-banner';
 messageEl.style.display = 'none';
-app.appendChild(messageEl);
+controls.insertAdjacentElement('afterend', messageEl);
 
 function showMessage(text: string, type: 'error' | 'info' = 'error') {
   messageEl.textContent = text;
@@ -325,8 +328,7 @@ function hideMessage() {
 }
 
 // ===== URL 路由：读写查询条件，分享链接可复现 =====
-function parseCityFromParam(value: string): City | null {
-  // 支持两种格式：城市名（如"大连"）或当前位置坐标（如"current:38.92,121.62"）
+function parseCityFromParam(value: string, params: URLSearchParams): City | null {
   if (value.startsWith('current:')) {
     const [lat, lng] = value.slice(8).split(',').map(Number);
     if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
@@ -334,25 +336,33 @@ function parseCityFromParam(value: string): City | null {
     }
     return null;
   }
-  if (!value) return null;
-  // 默认按大连的坐标兜底，名称使用 URL 中的值
-  return { name: value, latitude: 38.92, longitude: 121.62 };
+  const latitudeParam = params.get('lat');
+  const longitudeParam = params.get('lng');
+  if (!value || latitudeParam === null || longitudeParam === null) return null;
+  const latitude = Number(latitudeParam);
+  const longitude = Number(longitudeParam);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { name: value, latitude, longitude };
 }
 
-function cityToParam(city: City): string {
-  if (city.name === '当前位置') {
-    return `current:${city.latitude.toFixed(4)},${city.longitude.toFixed(4)}`;
-  }
-  return city.name;
-}
-
-function applyUrlParams(): void {
+async function applyUrlParams(): Promise<boolean> {
   const params = new URLSearchParams(location.search);
+  let hasValidCity = false;
 
   const cityParam = params.get('city');
   if (cityParam) {
-    const parsed = parseCityFromParam(cityParam);
+    let parsed = parseCityFromParam(cityParam, params);
+    if (!parsed) {
+      try {
+        const response = await searchCities(cityParam);
+        const result = response.results?.[0];
+        if (result) parsed = { name: cityParam, latitude: result.latitude, longitude: result.longitude };
+      } catch {
+        // 旧链接解析失败时保持默认城市，并允许浏览器定位接管。
+      }
+    }
     if (parsed) {
+      hasValidCity = true;
       defaultCity = parsed;
       state.city = parsed;
       const normalizedCity = citySearch.update(parsed);
@@ -363,7 +373,10 @@ function applyUrlParams(): void {
 
   const startParam = params.get('start');
   const endParam = params.get('end');
-  if (startParam && endParam) {
+  const monthDayPattern = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+  const isValidMonthDay = (value: string) => monthDayPattern.test(value)
+    && formatDate(new Date(`2000-${value}T00:00:00`)).slice(5) === value;
+  if (startParam && endParam && isValidMonthDay(startParam) && isValidMonthDay(endParam)) {
     state.startMonthDay = startParam;
     state.endMonthDay = endParam;
     dateRangePicker.setRange(startParam, endParam);
@@ -386,23 +399,29 @@ function applyUrlParams(): void {
   }
 
   // 主题模式只通过 localStorage 持久化，不属于查询条件，不从 URL 读取
+  return hasValidCity;
 }
 
-function updateUrlFromState(): void {
+function updateUrlFromState(query: { city: City; startMonthDay: string; endMonthDay: string; selectedYears: number[] }): void {
   const params = new URLSearchParams();
 
-  if (state.city.name !== FALLBACK_CITY.name) {
-    params.set('city', cityToParam(state.city));
+  const isFallbackCity = query.city.name === FALLBACK_CITY.name
+    && query.city.latitude === FALLBACK_CITY.latitude
+    && query.city.longitude === FALLBACK_CITY.longitude;
+  if (!isFallbackCity) {
+    params.set('city', query.city.name);
+    params.set('lat', query.city.latitude.toFixed(4));
+    params.set('lng', query.city.longitude.toFixed(4));
   }
 
-  if (state.startMonthDay && state.endMonthDay) {
-    if (state.startMonthDay !== DEFAULT_START_MD || state.endMonthDay !== DEFAULT_END_MD) {
-      params.set('start', state.startMonthDay);
-      params.set('end', state.endMonthDay);
+  if (query.startMonthDay && query.endMonthDay) {
+    if (query.startMonthDay !== DEFAULT_START_MD || query.endMonthDay !== DEFAULT_END_MD) {
+      params.set('start', query.startMonthDay);
+      params.set('end', query.endMonthDay);
     }
   }
 
-  const yearsStr = state.selectedYears.join(',');
+  const yearsStr = query.selectedYears.join(',');
   const defaultYearsStr = DEFAULT_YEARS.join(',');
   if (yearsStr && yearsStr !== defaultYearsStr) {
     params.set('years', yearsStr);
@@ -414,8 +433,8 @@ function updateUrlFromState(): void {
 
   // 主题模式通过 localStorage 持久化，不属于查询条件，不写入 URL
 
-  const query = params.toString();
-  const newUrl = query ? `${location.pathname}?${query}` : location.pathname;
+  const queryString = params.toString();
+  const newUrl = queryString ? `${location.pathname}?${queryString}` : location.pathname;
   window.history.replaceState({}, '', newUrl);
 }
 
@@ -423,7 +442,7 @@ function updateUrlFromState(): void {
 // 设计目的：避免"display:none 隐藏整个区域"导致的页面高度跳变，骨架与真实内容高度相近，加载时占位、数据回填后无缝切换。
 function showSkeletons() {
   chartSkeleton.style.display = 'block';
-  statsSkeleton.style.display = 'flex';
+  statsSkeleton.style.display = 'block';
   extremeSkeleton.style.display = 'flex';
   tableSkeleton.style.display = 'block';
   statsContent.style.display = 'none';
@@ -454,6 +473,7 @@ async function fetchYearData(
   startMonthDay: string,
   endMonthDay: string,
   todayStr: string,
+  signal: AbortSignal,
 ): Promise<YearlyData> {
   const wrap = isWrappingRange(startMonthDay, endMonthDay);
   const segments: [string, string][] = [];
@@ -476,12 +496,13 @@ async function fetchYearData(
   const horizonStr = formatDate(horizon);
 
   let truncated = false;
+  let forecastError = false;
 
   for (const [segStart, segEnd] of segments) {
     // 历史段：<= 今天，使用 archive 接口（含完整历史）
     const pastEnd = segEnd < todayStr ? segEnd : todayStr;
     if (segStart <= pastEnd) {
-      const resp = await fetchHistoricalWeather(city, segStart, pastEnd);
+      const resp = await fetchHistoricalWeather(city, segStart, pastEnd, signal);
       resp.daily.time.forEach((t, i) => {
         byMD.set(mdOf(t), {
           max: resp.daily.temperature_2m_max[i],
@@ -496,7 +517,7 @@ async function fetchYearData(
     const futEnd = segEnd < horizonStr ? segEnd : horizonStr;
     if (futStart <= futEnd) {
       try {
-        const resp = await fetchForecastWeather(city, futStart, futEnd);
+        const resp = await fetchForecastWeather(city, futStart, futEnd, signal);
         resp.daily.time.forEach((t, i) => {
           byMD.set(mdOf(t), {
             max: resp.daily.temperature_2m_max[i],
@@ -504,8 +525,9 @@ async function fetchYearData(
           });
           forecastMD.add(mdOf(t));
         });
-      } catch {
-        // 预报接口失败：保留历史段，未来段置为 null
+      } catch (error) {
+        if (signal.aborted) throw error;
+        forecastError = true;
       }
     }
     if (segEnd > horizonStr) truncated = true;
@@ -516,7 +538,7 @@ async function fetchYearData(
   const minTemps = labels.map((md) => (byMD.has(md) ? byMD.get(md)!.min : null));
   const forecastFlags = labels.map((md) => forecastMD.has(md));
 
-  return { year, dates: labels, maxTemps, minTemps, forecastFlags, truncated };
+  return { year, dates: labels, maxTemps, minTemps, forecastFlags, truncated, forecastError };
 }
 
 // Query handler
@@ -530,17 +552,30 @@ async function handleQuery() {
     return;
   }
 
+  activeQueryController?.abort();
+  const controller = new AbortController();
+  activeQueryController = controller;
+  const sequence = ++querySequence;
+  const query = {
+    city: { ...state.city },
+    startMonthDay: state.startMonthDay,
+    endMonthDay: state.endMonthDay,
+    selectedYears: [...state.selectedYears],
+  };
+
   state.loading = true;
+  queryBtn.disabled = true;
+  queryBtn.setAttribute('aria-busy', 'true');
   hideMessage();
   showSkeletons();
-  state.yearlyData = [];
 
   const todayStr = formatDate(new Date());
 
-  const promises = state.selectedYears.map(async (year) => {
+  const promises = query.selectedYears.map(async (year) => {
     try {
-      return await fetchYearData(state.city, year, state.startMonthDay, state.endMonthDay, todayStr);
+      return await fetchYearData(query.city, year, query.startMonthDay, query.endMonthDay, todayStr, controller.signal);
     } catch (error) {
+      if (controller.signal.aborted) throw error;
       return {
         year,
         dates: [],
@@ -552,16 +587,33 @@ async function handleQuery() {
     }
   });
 
-  const results = await Promise.all(promises);
+  let results: YearlyData[];
+  try {
+    results = await Promise.all(promises);
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    throw error;
+  }
+  if (sequence !== querySequence) return;
+
   state.yearlyData = results.filter((r) => !r.error);
   const errors = results.filter((r) => r.error);
   const truncatedYears = results.filter((r) => r.truncated && !r.error).map((r) => r.year);
+  const forecastErrorYears = results.filter((r) => r.forecastError && !r.error).map((r) => r.year);
 
   state.loading = false;
+  queryBtn.disabled = false;
+  queryBtn.removeAttribute('aria-busy');
+  activeQueryController = null;
   const hasData = state.yearlyData.length > 0;
 
   if (hasData) {
-    currentLabels = buildMonthDayLabels(state.startMonthDay, state.endMonthDay);
+    chartSection.style.display = '';
+    tableSection.style.display = '';
+    statsSection.style.display = '';
+    extremeSection.style.display = '';
+    currentLabels = buildMonthDayLabels(query.startMonthDay, query.endMonthDay);
+    currentCityName = query.city.name;
 
     const yearAvgTemps = state.yearlyData.map((r) => {
       const validMax = r.maxTemps.filter((t): t is number => t !== null);
@@ -573,12 +625,12 @@ async function handleQuery() {
     const heatwaves = detectHeatwaves(state.yearlyData, currentLabels);
     const coldWaves = detectColdWaves(state.yearlyData, currentLabels);
     const avgLine = multiYearDailyAverage(state.yearlyData, currentLabels, state.tempType);
-    const summary = buildSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
+    const summaries = buildYearSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
     const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
 
-    chart.update(state.yearlyData, state.tempType, currentYearColors, state.city.name, currentLabels, avgLine, yearAverages);
+    chart.update(state.yearlyData, state.tempType, currentYearColors, query.city.name, currentLabels, avgLine, yearAverages);
     dataTable.update(state.yearlyData, currentLabels);
-    statsCards.update(summary, state.tempType);
+    statsCards.update(summaries, state.tempType, currentYearColors);
     extremeCards.update(heatwaves, coldWaves, currentYearColors);
   }
 
@@ -588,7 +640,7 @@ async function handleQuery() {
 
   // 查询成功后把非默认条件写入 URL，方便分享
   if (hasData) {
-    updateUrlFromState();
+    updateUrlFromState(query);
   }
 
   if (!hasData) {
@@ -598,9 +650,11 @@ async function handleQuery() {
     extremeSection.style.display = 'none';
   }
 
-  if (errors.length > 0) {
-    const errorMsg = errors.map((e) => `${e.year}年：${e.error}`).join('；');
-    showMessage(`以下年份数据获取失败：${errorMsg}`, 'error');
+  if (errors.length > 0 || forecastErrorYears.length > 0) {
+    const messages: string[] = [];
+    if (errors.length > 0) messages.push(`数据获取失败：${errors.map((e) => `${e.year}年（${e.error}）`).join('；')}`);
+    if (forecastErrorYears.length > 0) messages.push(`${forecastErrorYears.join('、')}年的预报获取失败，已保留历史数据`);
+    showMessage(messages.join('。'), 'error');
   } else if (truncatedYears.length > 0) {
     showMessage(
       `提示：${truncatedYears.join('、')}年 所请求的未来日期超出 Open-Meteo 预报上限（约 15 天），超出部分无数据、已按可获取范围部分显示。`,

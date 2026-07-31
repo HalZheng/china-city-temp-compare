@@ -1,34 +1,50 @@
-import type { SummaryStats, TempType } from '../types';
+import type { TempType, YearSummaryStats } from '../types';
 
 interface StatsCardsProps {
   container: HTMLElement;
 }
 
 export function StatsCards({ container }: StatsCardsProps): {
-  update: (summary: SummaryStats, tempType: TempType) => void;
+  update: (summaries: YearSummaryStats[], tempType: TempType, colors: Record<number, string>) => void;
   clear: () => void;
 } {
   const wrapper = document.createElement('div');
   wrapper.className = 'stats-section';
   container.appendChild(wrapper);
 
-  function update(summary: SummaryStats, tempType: TempType) {
+  function update(summaries: YearSummaryStats[], tempType: TempType, colors: Record<number, string>) {
     wrapper.innerHTML = '';
-    if (!summary) return;
+    if (summaries.length === 0) return;
 
     const tempLabel = tempType === 'max' ? '最高气温' : '最低气温';
 
-    const bar = document.createElement('div');
-    bar.className = 'stat-cards';
-    bar.appendChild(statCard(`区间${tempLabel}均值`, fmt(summary.periodAvg), 'neutral'));
-    bar.appendChild(statCard('高温日 (≥35℃)', String(summary.hotDays), 'warm'));
-    bar.appendChild(statCard('热夜 (≥25℃)', String(summary.tropicalNights), 'warm'));
-    bar.appendChild(statCard('高温热浪 (≥3天)', `${summary.heatwaveCount} 次`, 'warm'));
-    bar.appendChild(statCard('寒潮 (≥3天)', `${summary.coldWaveCount} 次`, 'cold'));
-    bar.appendChild(statCard('严寒 (≤-10℃)', `${summary.severeColdCount} 次`, 'cold'));
-    bar.appendChild(statCard('冰冻日 (≤0℃)', String(summary.freezingDays), 'cold'));
-    bar.appendChild(statCard('极端寒夜 (≤-5℃)', String(summary.extremeColdNights), 'cold'));
-    wrapper.appendChild(bar);
+    const title = document.createElement('h2');
+    title.className = 'stats-title';
+    title.textContent = '逐年统计';
+    wrapper.appendChild(title);
+
+    const tableWrap = document.createElement('div');
+    tableWrap.className = 'stats-table-wrapper';
+    const table = document.createElement('table');
+    table.className = 'stats-table';
+    table.innerHTML = `<thead><tr>
+      <th>年份</th><th>${tempLabel}均值</th><th>高温日<br>≥35℃</th><th>热夜<br>≥25℃</th>
+      <th>热浪<br>≥3天</th><th>寒潮<br>≥3天</th><th>严寒<br>≤-10℃</th>
+      <th>冰冻日<br>≤0℃</th><th>极端寒夜<br>≤-5℃</th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+    for (const summary of summaries) {
+      const row = document.createElement('tr');
+      const forecastBadge = summary.includesForecast ? '<span class="badge-forecast">含预报</span>' : '';
+      row.innerHTML = `<th><span class="stats-year-dot" style="background:${colors[summary.year] || 'var(--icon)'}"></span>${summary.year}${forecastBadge}</th>
+        <td class="stats-average">${fmt(summary.periodAvg)}</td><td>${summary.hotDays}</td><td>${summary.tropicalNights}</td>
+        <td>${summary.heatwaveCount}</td><td>${summary.coldWaveCount}</td><td>${summary.severeColdCount}</td>
+        <td>${summary.freezingDays}</td><td>${summary.extremeColdNights}</td>`;
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+    wrapper.appendChild(tableWrap);
   }
 
   function clear() {
@@ -36,20 +52,6 @@ export function StatsCards({ container }: StatsCardsProps): {
   }
 
   return { update, clear };
-}
-
-function statCard(label: string, value: string, tone: 'neutral' | 'warm' | 'cold'): HTMLElement {
-  const card = document.createElement('div');
-  card.className = `stat-card stat-${tone}`;
-  const l = document.createElement('div');
-  l.className = 'stat-label';
-  l.textContent = label;
-  const v = document.createElement('div');
-  v.className = 'stat-value';
-  v.textContent = value;
-  card.appendChild(l);
-  card.appendChild(v);
-  return card;
 }
 
 function fmt(v: number | null): string {

@@ -39,7 +39,7 @@ const SEARCH_LIMIT = 60;
 
 // ---------------- 拼音工具 ----------------
 function fullPinyin(s: string): string {
-  return pinyin(s, { toneType: 'none' }).replace(/\s+/g, '').toLowerCase();
+  return pinyin(s, { toneType: 'none' }).replace(/\s+/g, '').replace(/ü/g, 'u').toLowerCase();
 }
 function initials(s: string): string {
   return pinyin(s, { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '').toLowerCase();
@@ -110,29 +110,48 @@ function sameAdminName(left: string, right: string): boolean {
 }
 
 function pickByProvince(results: GeocodingResult[], province: string): GeocodingResult | undefined {
-  const target = stripAdminSuffix(province);
-  return results.find(
-    (r) => !!r.admin1 && (r.admin1 === province || stripAdminSuffix(r.admin1) === target),
-  );
+  return results.find((result) => !!result.admin1 && sameAdminName(result.admin1, province));
+}
+
+async function trySearch(name: string): Promise<GeocodingResult[]> {
+  try {
+    return (await searchCities(name)).results ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function pinyinQuery(name: string): string {
+  return fullPinyin(normalizedAdminName(name));
+}
+
+function distanceSquared(left: GeocodingResult, right: GeocodingResult): number {
+  const latitudeDelta = left.latitude - right.latitude;
+  const longitudeDelta = left.longitude - right.longitude;
+  return latitudeDelta * latitudeDelta + longitudeDelta * longitudeDelta;
 }
 
 async function resolveCoordinates(entry: FlatEntry): Promise<GeocodingResult | null> {
-  let resp = await searchCities(entry.district);
-  let results = resp.results ?? [];
-  let picked = pickByProvince(results, entry.province) ?? results[0];
+  const parentName = entry.city === '市辖区' || entry.city === '县' ? entry.province : entry.city;
+  const cityResults = await trySearch(pinyinQuery(parentName));
+  const cityCenter = pickByProvince(cityResults, entry.province);
 
-  if (!picked) {
-    resp = await searchCities(`${entry.district}${entry.city}`);
-    results = resp.results ?? [];
-    picked = pickByProvince(results, entry.province) ?? results[0];
+  if (!cityCenter) {
+    return null;
   }
 
-  if (!picked) {
-    resp = await searchCities(entry.city);
-    results = resp.results ?? [];
-    picked = results[0];
+  const districtResults = await trySearch(pinyinQuery(entry.district));
+  const nearbyDistricts = districtResults
+    .filter((result) => !!result.admin1 && sameAdminName(result.admin1, entry.province))
+    .map((result) => ({ result, distance: distanceSquared(result, cityCenter) }))
+    .filter(({ distance }) => distance <= 1)
+    .sort((left, right) => left.distance - right.distance);
+
+  if (nearbyDistricts.length > 0) {
+    return nearbyDistricts[0].result;
   }
-  return picked ?? null;
+
+  return cityCenter;
 }
 
 // ---------------- 样式 ----------------
@@ -241,6 +260,7 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
   // 搜索输入框
   const searchInput = document.createElement('sl-input');
   searchInput.className = 'city-search__search';
+  searchInput.label = '城市或区县';
   searchInput.placeholder = '搜索城市/区县（支持拼音）';
   searchInput.value = defaultCity.name;
   searchInput.clearable = true;

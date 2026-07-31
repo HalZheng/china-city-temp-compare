@@ -37,6 +37,8 @@ export interface YearlyData {
   forecastFlags: boolean[];
   /** true 表示所请求的未来日期超出预报接口上限，超出部分无数据 */
   truncated?: boolean;
+  /** true 表示未来段请求失败，历史数据仍可用 */
+  forecastError?: boolean;
   error?: string;
 }
 
@@ -82,6 +84,11 @@ export interface SummaryStats {
   extremeColdNights: number;
   coldWaveCount: number;
   severeColdCount: number;
+}
+
+export interface YearSummaryStats extends SummaryStats {
+  year: number;
+  includesForecast: boolean;
 }
 
 export interface YearAverage {

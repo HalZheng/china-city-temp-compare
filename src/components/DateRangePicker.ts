@@ -41,6 +41,8 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): DateRangePi
 
   const startMd = getMonthDayFromDate(defaultRange.start);
   const endMd = getMonthDayFromDate(defaultRange.end);
+  let selectedStartMd = startMd;
+  let selectedEndMd = endMd;
   startInput.input.value = startMd;
   endInput.input.value = endMd;
 
@@ -57,6 +59,8 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): DateRangePi
   emit(startMd, endMd);
 
   function emit(sMd: string, eMd: string) {
+    selectedStartMd = sMd;
+    selectedEndMd = eMd;
     const isWrap = sMd > eMd;
     hint.textContent = isWrap ? '已选择跨年区间：将对比每年该时段（起始年→次年）' : '';
     hint.classList.toggle('date-hint--info', isWrap);
@@ -73,7 +77,11 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): DateRangePi
     input.readOnly = true;
     input.setAttribute('aria-label', label);
 
-    wrap.appendChild(input);
+    const labelEl = document.createElement('label');
+    labelEl.className = 'control-label';
+    labelEl.textContent = label;
+    labelEl.appendChild(input);
+    wrap.appendChild(labelEl);
     return { wrap, input, label };
   }
 
@@ -110,15 +118,15 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): DateRangePi
   // 延迟到挂载 DOM 后初始化
   requestAnimationFrame(() => {
     if (document.contains(container)) {
-      startInput.fp = initFlatpickr(startInput.input, defaultRange.start);
-      endInput.fp = initFlatpickr(endInput.input, defaultRange.end);
+      startInput.fp = initFlatpickr(startInput.input, selectedStartMd);
+      endInput.fp = initFlatpickr(endInput.input, selectedEndMd);
       notify();
     } else {
       const obs = new MutationObserver(() => {
         if (document.contains(container)) {
           obs.disconnect();
-          startInput.fp = initFlatpickr(startInput.input, defaultRange.start);
-          endInput.fp = initFlatpickr(endInput.input, defaultRange.end);
+          startInput.fp = initFlatpickr(startInput.input, selectedStartMd);
+          endInput.fp = initFlatpickr(endInput.input, selectedEndMd);
           notify();
         }
       });

@@ -32,7 +32,7 @@ export function YearSelector({ onChange }: YearSelectorProps): YearSelectorInsta
 
   const selectAllBtn = document.createElement('button');
   selectAllBtn.type = 'button';
-  selectAllBtn.textContent = '全选';
+  selectAllBtn.textContent = '最近 10 年';
   selectAllBtn.className = 'year-btn';
 
   const clearBtn = document.createElement('button');

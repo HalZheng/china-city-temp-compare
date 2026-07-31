@@ -1,4 +1,4 @@
-import type { ColdWavePeriod, HeatwavePeriod, SummaryStats, TempType, YearAverage, YearlyData } from '../types';
+import type { ColdWavePeriod, HeatwavePeriod, SummaryStats, TempType, YearAverage, YearlyData, YearSummaryStats } from '../types';
 import { buildColdWaveStats, buildHeatwaveStats } from './extremes';
 
 /** 单年区间平均气温（仅用有效值） */
@@ -56,4 +56,22 @@ export function buildSummaryStats(
 
 export function buildYearAverages(yearlyData: YearlyData[], tempType: TempType): YearAverage[] {
   return yearlyData.map((y) => ({ year: y.year, average: averageOfYear(y, tempType) }));
+}
+
+export function buildYearSummaryStats(
+  yearlyData: YearlyData[],
+  tempType: TempType,
+  heatwaves: HeatwavePeriod[],
+  coldWaves: ColdWavePeriod[],
+): YearSummaryStats[] {
+  return yearlyData.map((yearData) => ({
+    year: yearData.year,
+    includesForecast: yearData.forecastFlags.some(Boolean),
+    ...buildSummaryStats(
+      [yearData],
+      tempType,
+      heatwaves.filter((period) => period.year === yearData.year),
+      coldWaves.filter((period) => period.year === yearData.year),
+    ),
+  }));
 }
