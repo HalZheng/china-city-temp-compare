@@ -110,18 +110,18 @@ function initGeolocation() {
           latitude: lat,
           longitude: lng,
         };
-        defaultCity = currentCity;
-        state.city = currentCity;
-        await citySearch.update(currentCity);
+        const normalizedCity = citySearch.update(currentCity);
+        defaultCity = normalizedCity;
+        state.city = normalizedCity;
       } catch {
         const currentCity: City = {
           name: '当前位置',
           latitude: lat,
           longitude: lng,
         };
-        defaultCity = currentCity;
-        state.city = currentCity;
-        await citySearch.update(currentCity);
+        const normalizedCity = citySearch.update(currentCity);
+        defaultCity = normalizedCity;
+        state.city = normalizedCity;
       }
     },
     () => {
@@ -355,7 +355,9 @@ function applyUrlParams(): void {
     if (parsed) {
       defaultCity = parsed;
       state.city = parsed;
-      void citySearch.update(parsed);
+      const normalizedCity = citySearch.update(parsed);
+      defaultCity = normalizedCity;
+      state.city = normalizedCity;
     }
   }
 

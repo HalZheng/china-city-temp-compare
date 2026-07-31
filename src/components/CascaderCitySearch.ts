@@ -17,7 +17,7 @@ export interface CascaderCitySearchProps {
 
 export interface CascaderCitySearchInstance {
   element: HTMLElement;
-  update: (city: City) => void;
+  update: (city: City) => City;
 }
 
 /** pca.json 结构：省 -> 市 -> 区县列表 */
@@ -99,6 +99,16 @@ function stripAdminSuffix(s: string): string {
   return s.replace(/(省|市|自治区|壮族自治区|维吾尔自治区|回族自治区|特别行政区)$/, '');
 }
 
+function normalizedAdminName(name: string): string {
+  return stripAdminSuffix(name.replace(/(区|县|自治州|地区|盟)$/, ''));
+}
+
+function sameAdminName(left: string, right: string): boolean {
+  const normalizedLeft = normalizedAdminName(left);
+  const normalizedRight = normalizedAdminName(right);
+  return normalizedLeft === normalizedRight || fullPinyin(normalizedLeft) === fullPinyin(normalizedRight);
+}
+
 function pickByProvince(results: GeocodingResult[], province: string): GeocodingResult | undefined {
   const target = stripAdminSuffix(province);
   return results.find(
@@ -133,7 +143,12 @@ function injectStyles(): void {
   const style = document.createElement('style');
   style.id = 'cascader-city-search-style';
   style.textContent = `
-.city-search { position: relative; }
+.city-search {
+  position: relative;
+  z-index: 1000;
+  isolation: isolate;
+  --sl-z-index-dropdown: 1100;
+}
 
 /* Shoelace 变量映射到项目主题 */
 .city-search sl-input,
@@ -183,7 +198,7 @@ function injectStyles(): void {
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
-  z-index: 100;
+  z-index: 1200;
   max-height: 320px;
   overflow-y: auto;
   padding: 4px;
@@ -479,20 +494,15 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
   renderCities();
   renderDistricts();
 
-  // 外部通过经纬度更新城市时，只刷新 UI 不触发 onSelect
-  async function update(city: City): Promise<void> {
-    const cleanName = city.name.replace(/(市|区|县|自治州|地区|盟)$/g, '');
-    const entry = getFlatIndex().find(
-      (e) =>
-        e.district === city.name ||
-        e.district.replace(/(市|区|县|自治州|地区|盟)$/g, '') === cleanName ||
-        e.city === city.name ||
-        e.city.replace(/市$/, '') === cleanName ||
-        e.province === city.name,
-    );
-    if (entry) {
-      await selectEntry(entry, true);
-    } else {
+  // 外部通过经纬度更新城市时，只同步行政区 UI，保留浏览器提供的真实坐标。
+  function update(city: City): City {
+    const entries = getFlatIndex();
+    const districtEntry = entries.find((entry) => sameAdminName(entry.district, city.name));
+    const cityEntry = entries.find((entry) => sameAdminName(entry.city, city.name));
+    const provinceEntry = entries.find((entry) => sameAdminName(entry.province, city.name));
+    const entry = districtEntry ?? cityEntry ?? provinceEntry;
+
+    if (!entry) {
       // 未在行政区划库中找到时，仅更新搜索框显示
       searchInput.value = city.name;
       selectedProvince = '';
@@ -500,7 +510,25 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
       renderProvinces();
       renderCities();
       renderDistricts();
+      return city;
     }
+
+    selectedProvince = entry.province;
+    selectedCity = districtEntry || cityEntry ? entry.city : '';
+    renderProvinces();
+    renderCities();
+    renderDistricts();
+
+    if (districtEntry) {
+      distSelect.value = entry.district;
+      searchInput.value = entry.district;
+      return { ...city, name: entry.district };
+    }
+
+    distSelect.value = '';
+    const canonicalName = cityEntry ? normalizedAdminName(entry.city) : normalizedAdminName(entry.province);
+    searchInput.value = canonicalName;
+    return { ...city, name: canonicalName };
   }
 
   return { element: container, update };

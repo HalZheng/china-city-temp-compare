@@ -184,11 +184,8 @@ export function TempChart({ container }: TempChartProps): {
 
     // 图例项：左侧说明文字 + 各年份 + 多年平均（说明文字作为图例第一项参与整体居中）
     const yearNames = data.map((yd) => `${yd.year}`);
-    const legendData: string[] = [legendCaption, ...yearNames];
+    const legendData: any[] = [{ name: legendCaption, icon: 'none' }, ...yearNames];
     if (averageLine) legendData.push('多年平均');
-    const legendIcon: string[] = ['none'];
-    for (let i = 0; i < yearNames.length; i++) legendIcon.push('circle');
-    if (averageLine) legendIcon.push('circle');
 
     return {
       // 图例显隐属于"更新"操作，走 animationDurationUpdate -> 精致过渡动画；
@@ -217,10 +214,9 @@ export function TempChart({ container }: TempChartProps): {
         top: 64,
         left: 'center',
         data: legendData,
-        icon: legendIcon,
         selectedMode: 'multiple',
-        selected: { [legendCaption]: false, ...selected },
-        itemWidth: 16,
+        selected: { [legendCaption]: true, ...selected },
+        itemWidth: 22,
         itemHeight: 10,
         // 图例项两行显示：首行年份（深色），次行区间均值（浅色小字）。
         // 左侧说明文字项作为无图标的第一项，与年份图例整体居中。

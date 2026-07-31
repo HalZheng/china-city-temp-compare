@@ -741,7 +741,7 @@ body {
   100% { background-position: -200% 0; }
 }
 
-/* 图表骨架：绝对定位铺满 chart-container，用标题/tab/图例占位 + 多折线模拟最新图表结构 */
+/* 图表骨架：标题、说明文字、两行图例及绘图区与真实图表保持一致 */
 .skeleton-chart {
   position: absolute;
   inset: 0;
@@ -753,7 +753,7 @@ body {
   content: '';
   position: absolute;
   inset: 16px;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120' preserveAspectRatio='none'><rect x='130' y='6' width='140' height='14' rx='3' fill='%23e5e7eb'/><rect x='12' y='34' width='96' height='12' rx='2' fill='%23d1d5db'/><rect x='130' y='32' width='34' height='22' rx='2' fill='%23e5e7eb'/><rect x='174' y='32' width='34' height='22' rx='2' fill='%23e5e7eb'/><rect x='218' y='32' width='34' height='22' rx='2' fill='%23e5e7eb'/><rect x='262' y='32' width='34' height='22' rx='2' fill='%23e5e7eb'/><path d='M0,80 C30,60 60,90 90,70 S150,50 200,65 S280,40 330,55 S380,30 400,45' fill='none' stroke='%23d1d5db' stroke-width='2'/><path d='M0,60 C40,80 80,50 120,70 S190,90 240,75 S300,95 350,80 S380,100 400,85' fill='none' stroke='%239ca3af' stroke-width='2'/><path d='M0,90 C50,100 90,70 140,80 S210,60 260,70 S320,50 370,65 S390,55 400,60' fill='none' stroke='%23e5e7eb' stroke-width='2'/><path d='M0,70 C20,85 50,55 90,75 S160,85 210,60 S270,45 320,70 S370,50 400,65' fill='none' stroke='%23c4c8cc' stroke-width='2'/><line x1='0' y1='112' x2='400' y2='112' stroke='%23e5e7eb' stroke-width='1'/></svg>") no-repeat center / 100% 100%;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 360' preserveAspectRatio='none'><rect x='220' y='8' width='160' height='14' rx='3' fill='%23d1d5db'/><rect x='45' y='50' width='112' height='11' rx='2' fill='%23d1d5db'/><g stroke='%239ca3af' stroke-width='3' stroke-linecap='round'><path d='M178 48h24'/><path d='M248 48h24'/><path d='M318 48h24'/><path d='M388 48h24'/><path d='M458 48h24'/></g><g fill='%239ca3af'><circle cx='190' cy='48' r='4'/><circle cx='260' cy='48' r='4'/><circle cx='330' cy='48' r='4'/><circle cx='400' cy='48' r='4'/><circle cx='470' cy='48' r='4'/></g><g fill='%23e5e7eb'><rect x='174' y='66' width='32' height='8' rx='2'/><rect x='244' y='66' width='32' height='8' rx='2'/><rect x='314' y='66' width='32' height='8' rx='2'/><rect x='384' y='66' width='32' height='8' rx='2'/><rect x='454' y='66' width='32' height='8' rx='2'/></g><g stroke='%23e5e7eb' stroke-width='1'><path d='M42 112H580'/><path d='M42 172H580'/><path d='M42 232H580'/><path d='M42 292H580'/><path d='M42 112V320'/><path d='M42 320H580'/></g><path d='M42 232 C95 170 145 245 205 185 S315 130 375 195 S485 145 580 165' fill='none' stroke='%23c4c8cc' stroke-width='3'/><path d='M42 260 C105 205 160 275 220 225 S330 245 405 185 S510 215 580 190' fill='none' stroke='%239ca3af' stroke-width='3'/><path d='M42 285 C110 250 165 295 245 255 S350 270 430 230 S520 250 580 220' fill='none' stroke='%23d1d5db' stroke-width='3'/></svg>") no-repeat center / 100% 100%;
   opacity: 0.6;
 }
 
