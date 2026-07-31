@@ -42,26 +42,41 @@ title.textContent = '中国城市历年气温对比';
 header.appendChild(title);
 app.appendChild(header);
 
-// 主题切换按钮：跟随系统偏好初始化，点击在 light/dark 间切换
+// 主题切换按钮：三态循环 light → dark → auto（跟随系统）→ light
+type ThemeMode = 'light' | 'dark' | 'auto';
 const themeToggle = document.createElement('button');
 themeToggle.type = 'button';
 themeToggle.className = 'theme-toggle';
 themeToggle.title = '切换主题';
 themeToggle.setAttribute('aria-label', '切换主题');
-themeToggle.innerHTML = '<span class="icon-sun">☀</span><span class="icon-moon">☾</span>';
-// 读取 localStorage 持久化的手动选择，否则跟随系统
-const savedTheme = localStorage.getItem('theme');
-if (savedTheme === 'dark' || savedTheme === 'light') {
-  document.documentElement.setAttribute('data-theme', savedTheme);
+// 主题图标：light=☀ / dark=☾ / auto=半阴半阳（用 ⚘ 不够直观，用文字标识）
+const THEME_ICON: Record<ThemeMode, string> = { light: '☀', dark: '☾', auto: '◐' };
+const THEME_LABEL: Record<ThemeMode, string> = { light: '浅色', dark: '深色', auto: '跟随系统' };
+
+function applyTheme(mode: ThemeMode): void {
+  if (mode === 'auto') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', mode);
+  }
+  localStorage.setItem('theme', mode);
+  themeToggle.innerHTML = `<span class="icon-theme">${THEME_ICON[mode]}</span>`;
+  themeToggle.title = `当前：${THEME_LABEL[mode]}（点击切换）`;
+  // 通知图表重绘（读取新 CSS 变量值）
+  onThemeChange();
 }
+
+// 占位：chart 定义后赋值，用于主题切换时重绘图表读取新 CSS 变量
+let onThemeChange: () => void = () => {};
+
+// 读取持久化的主题模式，默认 auto
+const savedTheme = (localStorage.getItem('theme') as ThemeMode | null) ?? 'auto';
+applyTheme(savedTheme);
+
 themeToggle.addEventListener('click', () => {
-  const current = document.documentElement.getAttribute('data-theme');
-  // 计算当前实际生效主题（考虑系统偏好）
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const isDark = current ? current === 'dark' : prefersDark;
-  const next = isDark ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('theme', next);
+  const current = (localStorage.getItem('theme') as ThemeMode) ?? 'auto';
+  const next: ThemeMode = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
+  applyTheme(next);
 });
 app.appendChild(themeToggle);
 
@@ -221,6 +236,19 @@ tableSection.appendChild(tableContent);
 app.appendChild(tableSection);
 
 const dataTable = DataTable({ container: tableContent });
+
+// 主题切换时重绘图表/卡片（读取新 CSS 变量值，使硬编码颜色跟随主题）
+onThemeChange = () => {
+  if (state.yearlyData.length > 0) {
+    setTempType(state.tempType);
+  }
+};
+// auto 模式下系统主题变化时也重绘
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if ((localStorage.getItem('theme') as ThemeMode | null) ?? 'auto' === 'auto') {
+    onThemeChange();
+  }
+});
 
 // Footer
 const footer = document.createElement('footer');

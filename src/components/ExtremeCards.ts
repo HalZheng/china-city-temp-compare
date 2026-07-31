@@ -61,7 +61,7 @@ function renderGroup(
     header.className = 'extreme-year-header';
     const dot = document.createElement('span');
     dot.className = 'extreme-dot';
-    dot.style.background = colors[year] || '#9ca3af';
+    dot.style.background = colors[year] || 'var(--icon)';
     header.appendChild(dot);
     header.appendChild(document.createTextNode(String(year)));
     card.appendChild(header);

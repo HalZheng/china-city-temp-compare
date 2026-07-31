@@ -1,3 +1,8 @@
+/** 读取 CSS 变量的当前计算值（用于 ECharts 等无法直接用 var() 的场景） */
+export function getCssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 export function getRecentYears(count: number, excludeCurrent: boolean = true): number[] {
   const currentYear = new Date().getFullYear();
   const start = excludeCurrent ? currentYear - 1 : currentYear;

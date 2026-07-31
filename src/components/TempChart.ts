@@ -9,6 +9,7 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { YearlyData, TempType } from '../types';
+import { getCssVar } from '../utils/helpers';
 
 echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, ToolboxComponent, CanvasRenderer]);
 
@@ -85,7 +86,7 @@ export function TempChart({ container }: TempChartProps): {
 
     for (const yd of data) {
       const temps = tempType === 'max' ? yd.maxTemps : yd.minTemps;
-      const color = colors[yd.year] || '#374151';
+      const color = colors[yd.year] || getCssVar('--text') || '#374151';
       const forecastFlags = yd.forecastFlags || [];
       const hasForecast = forecastFlags.some(Boolean);
       const firstFc = forecastFlags.findIndex(Boolean);
@@ -147,8 +148,8 @@ export function TempChart({ container }: TempChartProps): {
         smooth: true,
         showSymbol: false,
         connectNulls: false,
-        lineStyle: { type: 'dashed', color: '#6b7280', width: 2 },
-        itemStyle: { color: '#6b7280' },
+        lineStyle: { type: 'dashed', color: getCssVar('--icon') || '#6b7280', width: 2 },
+        itemStyle: { color: getCssVar('--icon') || '#6b7280' },
         z: 1,
       });
     }
@@ -171,6 +172,12 @@ export function TempChart({ container }: TempChartProps): {
     // 年份 -> 区间均值映射，供 legend formatter 查询
     const avgMap: Record<number, number | null> = {};
     if (yearAverages) for (const ya of yearAverages) avgMap[ya.year] = ya.average;
+    // 读取当前主题的 CSS 变量值（主题切换后 buildOption 重新执行，拿到新值）
+    const cTextH = getCssVar('--text-h') || '#111827';
+    const cText = getCssVar('--text') || '#374151';
+    const cMuted = getCssVar('--icon') || '#6b7280';
+    const cBorder = getCssVar('--border') || '#e5e7eb';
+    const cSurface = getCssVar('--surface') || '#ffffff';
     return {
       // 图例显隐属于"更新"操作，走 animationDurationUpdate -> 精致过渡动画；
       // 全量重建(查询/切类型, notMerge:true)使用 animationDuration:0，避免整图入场抖动
@@ -185,8 +192,8 @@ export function TempChart({ container }: TempChartProps): {
         subtext: legendCaption,
         top: 8,
         left: 'center',
-        textStyle: { fontSize: 15, color: '#111827', fontWeight: 500 },
-        subtextStyle: { fontSize: 11, color: '#6b7280' },
+        textStyle: { fontSize: 15, color: cTextH, fontWeight: 500 },
+        subtextStyle: { fontSize: 11, color: cMuted },
         itemGap: 4,
       },
       tooltip: {
@@ -215,10 +222,10 @@ export function TempChart({ container }: TempChartProps): {
         },
         textStyle: {
           fontSize: 12,
-          color: '#374151',
+          color: cText,
           rich: {
-            year: { fontSize: 12, color: '#374151', lineHeight: 14 },
-            temp: { fontSize: 11, color: '#6b7280', lineHeight: 14 },
+            year: { fontSize: 12, color: cText, lineHeight: 14 },
+            temp: { fontSize: 11, color: cMuted, lineHeight: 14 },
           },
         },
       },
@@ -229,7 +236,7 @@ export function TempChart({ container }: TempChartProps): {
           saveAsImage: {
             name: `${cityName}_气温对比`,
             title: '保存为图片',
-            backgroundColor: '#ffffff',
+            backgroundColor: cSurface,
             pixelRatio: 2,
           },
         },
@@ -243,20 +250,20 @@ export function TempChart({ container }: TempChartProps): {
         name: '日期',
         nameLocation: 'middle',
         nameGap: 30,
-        nameTextStyle: { fontSize: 12, color: '#6b7280' },
-        axisLine: { lineStyle: { color: '#e5e7eb' } },
+        nameTextStyle: { fontSize: 12, color: cMuted },
+        axisLine: { lineStyle: { color: cBorder } },
         axisTick: { show: false },
-        axisLabel: { fontSize: 12, color: '#6b7280' },
-        splitLine: { show: true, lineStyle: { color: 'rgba(0,0,0,0.04)' } },
+        axisLabel: { fontSize: 12, color: cMuted },
+        splitLine: { show: true, lineStyle: { color: 'rgba(128,128,128,0.08)' } },
       },
       yAxis: {
         type: 'value',
         // 按可见年份的极值动态自适应纵轴（不含强制 0 基线，避免曲线被压扁）
         scale: true,
         name: '温度(℃)',
-        nameTextStyle: { fontSize: 12, color: '#6b7280' },
-        axisLabel: { fontSize: 12, color: '#6b7280', formatter: '{value}°' },
-        splitLine: { lineStyle: { color: 'rgba(0,0,0,0.06)' } },
+        nameTextStyle: { fontSize: 12, color: cMuted },
+        axisLabel: { fontSize: 12, color: cMuted, formatter: '{value}°' },
+        splitLine: { lineStyle: { color: 'rgba(128,128,128,0.1)' } },
       },
       series,
     };

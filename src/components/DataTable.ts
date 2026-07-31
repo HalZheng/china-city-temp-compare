@@ -64,9 +64,9 @@ export function DataTable({ container }: DataTableProps): { update: (data: Yearl
         if (typeof maxT === 'number' && typeof minT === 'number') {
           const maxColor = getTemperatureColor(maxT);
           const minColor = getTemperatureColor(minT);
-          const maxStyle = maxColor ? `color:${maxColor};font-weight:600;` : 'color:#374151;';
-          const minStyle = minColor ? `color:${minColor};font-weight:600;` : 'color:#374151;';
-          td.innerHTML = `<span style="${maxStyle}">${maxT.toFixed(1)}</span><span style="color:#9ca3af;margin:0 2px;">/</span><span style="${minStyle}">${minT.toFixed(1)}</span>`;
+          const maxStyle = maxColor ? `color:${maxColor};font-weight:600;` : 'color:var(--text);';
+          const minStyle = minColor ? `color:${minColor};font-weight:600;` : 'color:var(--text);';
+          td.innerHTML = `<span style="${maxStyle}">${maxT.toFixed(1)}</span><span style="color:var(--icon);margin:0 2px;">/</span><span style="${minStyle}">${minT.toFixed(1)}</span>`;
         } else {
           td.textContent = '-';
         }
