@@ -481,11 +481,19 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
 
   // 外部通过经纬度更新城市时，只刷新 UI 不触发 onSelect
   async function update(city: City): Promise<void> {
-    const entry = getFlatIndex().find((e) => e.district === city.name);
+    const cleanName = city.name.replace(/(市|区|县|自治州|地区|盟)$/g, '');
+    const entry = getFlatIndex().find(
+      (e) =>
+        e.district === city.name ||
+        e.district.replace(/(市|区|县|自治州|地区|盟)$/g, '') === cleanName ||
+        e.city === city.name ||
+        e.city.replace(/市$/, '') === cleanName ||
+        e.province === city.name,
+    );
     if (entry) {
       await selectEntry(entry, true);
     } else {
-      // 未在行政区划库中找到时（如"当前位置"），仅更新搜索框显示
+      // 未在行政区划库中找到时，仅更新搜索框显示
       searchInput.value = city.name;
       selectedProvince = '';
       selectedCity = '';

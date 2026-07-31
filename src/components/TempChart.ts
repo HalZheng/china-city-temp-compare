@@ -165,10 +165,12 @@ export function TempChart({ container }: TempChartProps): {
     series: any[],
     colors: Record<number, string>,
     selected: Record<string, boolean>,
+    data: YearlyData[],
+    averageLine?: (number | null)[],
     yearAverages?: { year: number; average: number | null }[],
   ): echarts.EChartsCoreOption {
     const tempLabel = tempType === 'max' ? '最高气温对比' : '最低气温对比';
-    // 图例副标题：说明图例中温度数值的含义（跟随 tempType 切换）
+    // 图例左侧说明文字：解释温度数值含义（跟随 tempType 切换）
     const legendCaption = tempType === 'max' ? '区间最高气温均值' : '区间最低气温均值';
     // 年份 -> 区间均值映射，供 legend formatter 查询
     const avgMap: Record<number, number | null> = {};
@@ -179,6 +181,15 @@ export function TempChart({ container }: TempChartProps): {
     const cMuted = getCssVar('--icon') || '#6b7280';
     const cBorder = getCssVar('--border') || '#e5e7eb';
     const cSurface = getCssVar('--surface') || '#ffffff';
+
+    // 图例项：左侧说明文字 + 各年份 + 多年平均（说明文字作为图例第一项参与整体居中）
+    const yearNames = data.map((yd) => `${yd.year}`);
+    const legendData: string[] = [legendCaption, ...yearNames];
+    if (averageLine) legendData.push('多年平均');
+    const legendIcon: string[] = ['none'];
+    for (let i = 0; i < yearNames.length; i++) legendIcon.push('circle');
+    if (averageLine) legendIcon.push('circle');
+
     return {
       // 图例显隐属于"更新"操作，走 animationDurationUpdate -> 精致过渡动画；
       // 全量重建(查询/切类型, notMerge:true)使用 animationDuration:0，避免整图入场抖动
@@ -188,21 +199,12 @@ export function TempChart({ container }: TempChartProps): {
       animationEasingUpdate: 'cubicOut',
       color: Object.values(colors),
       backgroundColor: 'transparent',
-      title: [
-        {
-          text: `${cityName} · ${tempLabel}`,
-          top: 8,
-          left: 'center',
-          textStyle: { fontSize: 15, color: cTextH, fontWeight: 500 },
-        },
-        {
-          text: legendCaption,
-          top: 64,
-          left: 12,
-          textStyle: { fontSize: 12, color: cText, fontWeight: 400 },
-          padding: 0,
-        },
-      ],
+      title: {
+        text: `${cityName} · ${tempLabel}`,
+        top: 8,
+        left: 'center',
+        textStyle: { fontSize: 15, color: cTextH, fontWeight: 500 },
+      },
       tooltip: {
         trigger: 'axis',
         backgroundColor: 'rgba(17, 24, 39, 0.92)',
@@ -213,15 +215,17 @@ export function TempChart({ container }: TempChartProps): {
       legend: {
         type: 'scroll',
         top: 64,
-        left: 116,
-        right: 12,
-        selectedMode: true,
-        selected,
-        itemWidth: 14,
-        itemHeight: 8,
+        left: 'center',
+        data: legendData,
+        icon: legendIcon,
+        selectedMode: 'multiple',
+        selected: { [legendCaption]: false, ...selected },
+        itemWidth: 16,
+        itemHeight: 10,
         // 图例项两行显示：首行年份（深色），次行区间均值（浅色小字）。
-        // 「多年平均」项保持单行原样。rich 文本为两行提供独立 lineHeight。
+        // 左侧说明文字项作为无图标的第一项，与年份图例整体居中。
         formatter: (name: string) => {
+          if (name === legendCaption) return `{caption|${name}}`;
           if (name === '多年平均') return name;
           const y = parseYearFromName(name);
           if (Number.isNaN(y)) return name;
@@ -229,11 +233,12 @@ export function TempChart({ container }: TempChartProps): {
           return `{year|${y}}\n{temp|${avg != null ? avg.toFixed(1) + '℃' : '—'}}`;
         },
         textStyle: {
-          fontSize: 12,
+          fontSize: 14,
           color: cText,
           rich: {
-            year: { fontSize: 12, color: cText, lineHeight: 14 },
-            temp: { fontSize: 11, color: cMuted, lineHeight: 14 },
+            caption: { fontSize: 14, color: cText, lineHeight: 18, padding: [0, 8, 0, 0] },
+            year: { fontSize: 14, color: cText, lineHeight: 18, width: 42, align: 'left' },
+            temp: { fontSize: 13, color: cMuted, lineHeight: 18, width: 54, align: 'left' },
           },
         },
       },
@@ -249,8 +254,8 @@ export function TempChart({ container }: TempChartProps): {
           },
         },
       },
-      // 图例两行 + 副标题占用更多顶部空间，grid.top 相应下调
-      grid: { top: 116, left: 56, right: 28, bottom: 48, containLabel: false },
+      // 图例两行 + 说明文字占用更多顶部空间，grid.top 相应下调
+      grid: { top: 124, left: 56, right: 28, bottom: 48, containLabel: false },
       xAxis: {
         type: 'category',
         data: labels,
@@ -297,7 +302,7 @@ export function TempChart({ container }: TempChartProps): {
       else selected[s.name] = !hiddenYears.has(parseYearFromName(s.name));
     }
 
-    const option = buildOption(cityName, tempType, labels, series, colors, selected, yearAverages);
+    const option = buildOption(cityName, tempType, labels, series, colors, selected, data, averageLine, yearAverages);
 
     ensureInit();
     // notMerge 保证查询年份变化时不会残留旧系列

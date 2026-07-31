@@ -17,6 +17,24 @@ export async function searchCities(name: string): Promise<GeocodingResponse> {
   return response.json();
 }
 
+export interface ReverseGeocodeResult {
+  city: string;
+  locality: string;
+  principalSubdivision: string;
+  countryName: string;
+  latitude: number;
+  longitude: number;
+}
+
+export async function reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult> {
+  const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Reverse geocoding error: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function fetchHistoricalWeather(
   city: City,
   startDate: string,

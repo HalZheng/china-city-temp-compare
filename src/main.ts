@@ -5,7 +5,7 @@ import { DateRangePicker } from './components/DateRangePicker';
 import { YearSelector } from './components/YearSelector';
 import { TempChart } from './components/TempChart';
 import { DataTable } from './components/DataTable';
-import { fetchHistoricalWeather, fetchForecastWeather } from './api/open-meteo';
+import { fetchHistoricalWeather, fetchForecastWeather, reverseGeocode } from './api/open-meteo';
 import { formatDate, buildMonthDayLabels, isWrappingRange, assignColorsByAverageTemp, getDefaultDateRange, getRecentYears } from './utils/helpers';
 import { detectHeatwaves, detectColdWaves } from './logic/extremes';
 import { buildSummaryStats, buildYearAverages, multiYearDailyAverage } from './logic/stats';
@@ -98,14 +98,31 @@ function initGeolocation() {
   if (!('geolocation' in navigator)) return;
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
-      const currentCity: City = {
-        name: '当前位置',
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-      };
-      defaultCity = currentCity;
-      state.city = currentCity;
-      await citySearch.update(currentCity);
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      try {
+        const geo = await reverseGeocode(lat, lng);
+        // 优先使用城市名，去掉常见行政区划后缀，保证搜索框显示真实中文地区名称
+        const rawName = geo.city || geo.locality || '当前位置';
+        const locationName = rawName.replace(/(市|区|县|自治州|地区|盟)$/, '') || rawName;
+        const currentCity: City = {
+          name: locationName,
+          latitude: lat,
+          longitude: lng,
+        };
+        defaultCity = currentCity;
+        state.city = currentCity;
+        await citySearch.update(currentCity);
+      } catch {
+        const currentCity: City = {
+          name: '当前位置',
+          latitude: lat,
+          longitude: lng,
+        };
+        defaultCity = currentCity;
+        state.city = currentCity;
+        await citySearch.update(currentCity);
+      }
     },
     () => {
       // 获取失败时保持默认城市（大连）
@@ -132,7 +149,6 @@ const DEFAULT_RANGE = getDefaultDateRange();
 const DEFAULT_START_MD = DEFAULT_RANGE.start.slice(5);
 const DEFAULT_END_MD = DEFAULT_RANGE.end.slice(5);
 const DEFAULT_TEMP_TYPE: TempType = 'max';
-const DEFAULT_THEME: ThemeMode = 'auto';
 
 const queryBtn = document.createElement('button');
 queryBtn.type = 'button';
@@ -218,10 +234,10 @@ const chart = TempChart({ container: chartContainer });
 const statsSection = document.createElement('section');
 statsSection.className = 'stats-container';
 app.appendChild(statsSection);
-// 骨架屏：3 张占位卡片，加载时显示；数据返回后隐藏
+// 骨架屏：8 张占位卡片，与 StatsCards 实际卡片数量一致
 const statsSkeleton = document.createElement('div');
 statsSkeleton.className = 'skeleton-row';
-for (let i = 0; i < 3; i++) {
+for (let i = 0; i < 8; i++) {
   const c = document.createElement('div');
   c.className = 'skeleton skeleton-card';
   statsSkeleton.appendChild(c);
@@ -367,10 +383,7 @@ function applyUrlParams(): void {
     setTempType(typeParam);
   }
 
-  const themeParam = params.get('theme') as ThemeMode | null;
-  if (themeParam === 'light' || themeParam === 'dark' || themeParam === 'auto') {
-    applyTheme(themeParam);
-  }
+  // 主题模式只通过 localStorage 持久化，不属于查询条件，不从 URL 读取
 }
 
 function updateUrlFromState(): void {
@@ -397,10 +410,7 @@ function updateUrlFromState(): void {
     params.set('type', state.tempType);
   }
 
-  const currentTheme = (localStorage.getItem('theme') as ThemeMode | null) ?? DEFAULT_THEME;
-  if (currentTheme !== DEFAULT_THEME) {
-    params.set('theme', currentTheme);
-  }
+  // 主题模式通过 localStorage 持久化，不属于查询条件，不写入 URL
 
   const query = params.toString();
   const newUrl = query ? `${location.pathname}?${query}` : location.pathname;
