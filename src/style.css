@@ -447,6 +447,54 @@ body {
   width: 100%;
 }
 
+/* 横屏全屏按钮 */
+.chart-fullscreen-btn {
+  position: absolute;
+  top: 8px;
+  right: 44px;
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-h);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.chart-fullscreen-btn:hover {
+  background: var(--accent-bg);
+}
+
+/* 横屏全屏：CSS transform 旋转绕开系统方向锁
+   原生 fullscreen 时 container 已铺满视口；iOS 降级时靠 fixed inset:0 模拟 */
+.chart-container.fullscreen-landscape {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--bg);
+}
+.chart-container.fullscreen-landscape .chart-wrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* 宽高互换：竖屏视口的宽变成横屏的高，反之亦然；再旋转 90° 铺满横屏 */
+  width: 100vh;
+  height: 100vw;
+  transform: translate(-50%, -50%) rotate(90deg);
+  transform-origin: center center;
+}
+.chart-container.fullscreen-landscape .chart-fullscreen-btn {
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+}
+
 /* Table Section */
 .table-section {
   background: var(--surface);
@@ -569,6 +617,13 @@ body {
   .data-table td {
     padding: 8px 10px;
     font-size: 13px;
+  }
+}
+
+/* 手机真实横屏：图表撑满高度，弥补竖屏 300px 的局促 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .chart-container {
+    height: 70vh;
   }
 }
 

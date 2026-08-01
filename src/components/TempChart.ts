@@ -6,12 +6,13 @@ import {
   LegendComponent,
   TitleComponent,
   ToolboxComponent,
+  DataZoomComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { YearlyData, TempType } from '../types';
 import { getCssVar } from '../utils/helpers';
 
-echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, ToolboxComponent, CanvasRenderer]);
+echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, ToolboxComponent, DataZoomComponent, CanvasRenderer]);
 
 interface TempChartProps {
   container: HTMLElement;
@@ -32,6 +33,15 @@ export function TempChart({ container }: TempChartProps): {
   const chartEl = document.createElement('div');
   chartEl.className = 'temp-chart';
   wrapper.appendChild(chartEl);
+
+  // 横屏全屏按钮：CSS transform 旋转绕开系统方向锁，iOS 降级为 fixed overlay
+  const fsBtn = document.createElement('button');
+  fsBtn.type = 'button';
+  fsBtn.className = 'chart-fullscreen-btn';
+  fsBtn.title = '横屏全屏查看';
+  fsBtn.setAttribute('aria-label', '横屏全屏查看');
+  fsBtn.innerHTML = '&#10548;'; // ↥ 向上右斜箭头，语义"撑满"
+  wrapper.appendChild(fsBtn);
 
   let chart: EChartsInstance | null = null;
   // 以「年份整数」为 key 记录被隐藏的系列，跨 tempType 切换 / 重查询保持稳定
@@ -69,6 +79,54 @@ export function TempChart({ container }: TempChartProps): {
     resizeObserver.observe(chartEl);
     chart.on('legendselectchanged', handleLegendSelectChanged);
   }
+
+  // ===== 横屏全屏：CSS transform 旋转，绕开 screen.orientation.lock（iOS 不支持）=====
+  function isFullscreen() {
+    return container.classList.contains('fullscreen-landscape');
+  }
+
+  async function enterFullscreen() {
+    container.classList.add('fullscreen-landscape');
+    fsBtn.innerHTML = '&#10060;'; // ✕ 退出
+    fsBtn.title = '退出全屏';
+    fsBtn.setAttribute('aria-label', '退出全屏');
+    // 优先原生 Fullscreen API（隐藏地址栏，体验最佳；iOS Safari 对非 video 元素不支持，会抛错，降级到 CSS fixed overlay）
+    const el = container as HTMLElement & { requestFullscreen?: () => Promise<void> };
+    if (typeof el.requestFullscreen === 'function') {
+      try { await el.requestFullscreen(); } catch { /* 降级：仅靠 CSS 类的 fixed inset:0 模拟全屏 */ }
+    }
+    // 旋转后尺寸变化，下一帧 resize 让 ECharts 重排
+    requestAnimationFrame(() => chart?.resize());
+  }
+
+  async function exitFullscreen() {
+    container.classList.remove('fullscreen-landscape');
+    fsBtn.innerHTML = '&#10548;';
+    fsBtn.title = '横屏全屏查看';
+    fsBtn.setAttribute('aria-label', '横屏全屏查看');
+    if (document.fullscreenElement) {
+      try { await document.exitFullscreen(); } catch { /* ignore */ }
+    }
+    requestAnimationFrame(() => chart?.resize());
+  }
+
+  function toggleFullscreen() {
+    if (isFullscreen()) void exitFullscreen(); else void enterFullscreen();
+  }
+
+  // 系统级退出（ESC / F11）时同步移除 CSS 类
+  function handleFullscreenChange() {
+    if (!document.fullscreenElement && isFullscreen()) {
+      container.classList.remove('fullscreen-landscape');
+      fsBtn.innerHTML = '&#10548;';
+      fsBtn.title = '横屏全屏查看';
+      fsBtn.setAttribute('aria-label', '横屏全屏查看');
+      requestAnimationFrame(() => chart?.resize());
+    }
+  }
+
+  fsBtn.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
 
   function parseYearFromName(name: string): number {
     const m = name.match(/^(\d+)/);
@@ -187,6 +245,27 @@ export function TempChart({ container }: TempChartProps): {
     const legendData: any[] = [...yearNames];
     if (averageLine) legendData.push('多年平均');
 
+    // 移动端竖屏：默认只显示前 60%，留出平移空间 + 底部 slider；全屏横屏 / 桌面：全显，仅 inside 缩放
+    const isNarrow = window.matchMedia('(max-width: 768px)').matches && !isFullscreen();
+    const dzEnd = isNarrow ? 60 : 100;
+    const dataZoom: any[] = [
+      { type: 'inside', start: 0, end: dzEnd, zoomOnMouseWheel: true, moveOnMouseMove: true },
+    ];
+    if (isNarrow) {
+      dataZoom.push({
+        type: 'slider',
+        start: 0,
+        end: dzEnd,
+        height: 18,
+        bottom: 8,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(128,128,128,0.08)',
+        fillerColor: 'rgba(128,128,128,0.2)',
+        handleStyle: { color: cMuted },
+        textStyle: { color: cMuted, fontSize: 11 },
+      });
+    }
+
     return {
       // 图例显隐属于"更新"操作，走 animationDurationUpdate -> 精致过渡动画；
       // 全量重建(查询/切类型, notMerge:true)使用 animationDuration:0，避免整图入场抖动
@@ -251,7 +330,9 @@ export function TempChart({ container }: TempChartProps): {
         },
       },
       // 图例两行 + 说明文字占用更多顶部空间，grid.top 相应下调
-      grid: { top: 124, left: 56, right: 28, bottom: 48, containLabel: false },
+      // 移动端竖屏：底部预留 dataZoom slider 空间；全屏横屏 / 桌面：无需 slider
+      grid: { top: 124, left: 56, right: 28, bottom: isNarrow ? 80 : 48, containLabel: false },
+      dataZoom,
       xAxis: {
         type: 'category',
         data: labels,
@@ -308,6 +389,11 @@ export function TempChart({ container }: TempChartProps): {
 
   function destroy() {
     resizeObserver.disconnect();
+    fsBtn.removeEventListener('click', toggleFullscreen);
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    if (document.fullscreenElement) {
+      try { void document.exitFullscreen(); } catch { /* ignore */ }
+    }
     if (chart) {
       chart.dispose();
       chart = null;
