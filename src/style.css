@@ -436,6 +436,7 @@ body {
 }
 
 .chart-wrapper {
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -471,25 +472,31 @@ body {
   background: var(--accent-bg);
 }
 
-/* 横屏全屏：CSS transform 旋转绕开系统方向锁
-   原生 fullscreen 时 container 已铺满视口；iOS 降级时靠 fixed inset:0 模拟 */
+/* 横屏全屏：容器铺满视口；wrapper 用 dvh/dvw 取视口尺寸并旋转居中
+   （竖屏视口：宽高互换 + rotate -90°；系统已横屏：JS 加 is-landscape-viewport 类，不旋转直接铺满）*/
 .chart-container.fullscreen-landscape {
   position: fixed;
   inset: 0;
   z-index: 9999;
   background: var(--bg);
+  overflow: hidden;
 }
 .chart-container.fullscreen-landscape .chart-wrapper {
   position: absolute;
   top: 50%;
   left: 50%;
-  /* 宽高互换：竖屏视口的宽变成横屏的高，反之亦然；再旋转 90° 铺满横屏 */
-  width: 100vh;
-  height: 100vw;
-  transform: translate(-50%, -50%) rotate(90deg);
+  width: 100dvh;
+  height: 100dvw;
+  transform: translate(-50%, -50%) rotate(-90deg);
   transform-origin: center center;
 }
+.chart-container.fullscreen-landscape.is-landscape-viewport .chart-wrapper {
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+}
 .chart-container.fullscreen-landscape .chart-fullscreen-btn {
+  position: fixed;
   top: 12px;
   right: 12px;
   z-index: 20;
@@ -611,6 +618,11 @@ body {
 
   .chart-container {
     height: 300px;
+    /* 窄屏突破 #app padding，撑满视口宽度，配合 dataZoom 最大化横向可用空间 */
+    margin-left: -16px;
+    margin-right: -16px;
+    width: calc(100% + 32px);
+    border-radius: 0;
   }
 
   .data-table th,

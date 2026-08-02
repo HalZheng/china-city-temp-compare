@@ -41,7 +41,8 @@ export function TempChart({ container }: TempChartProps): {
   fsBtn.title = '横屏全屏查看';
   fsBtn.setAttribute('aria-label', '横屏全屏查看');
   fsBtn.innerHTML = '&#10548;'; // ↥ 向上右斜箭头，语义"撑满"
-  wrapper.appendChild(fsBtn);
+  // 挂到 container 而非 wrapper：全屏旋转时 wrapper 会 rotate，按钮需固定在屏幕右上角
+  container.appendChild(fsBtn);
 
   let chart: EChartsInstance | null = null;
   // 以「年份整数」为 key 记录被隐藏的系列，跨 tempType 切换 / 重查询保持稳定
@@ -80,9 +81,17 @@ export function TempChart({ container }: TempChartProps): {
     chart.on('legendselectchanged', handleLegendSelectChanged);
   }
 
-  // ===== 横屏全屏：CSS transform 旋转，绕开 screen.orientation.lock（iOS 不支持）=====
+  // ===== 横屏全屏：CSS transform 旋转绕开 screen.orientation.lock（iOS 不支持）=====
   function isFullscreen() {
     return container.classList.contains('fullscreen-landscape');
+  }
+
+  // 按当前视口方向切换 class：竖屏视口→CSS rotate 横屏；系统已横屏→加 is-landscape-viewport 类直接铺满
+  // 尺寸与居中全由 CSS（dvh/dvw + translate）处理，避免 JS 计算时机/精度问题
+  function applyFullscreenLayout() {
+    const isPortrait = window.innerHeight > window.innerWidth;
+    container.classList.toggle('is-landscape-viewport', !isPortrait);
+    requestAnimationFrame(() => chart?.resize());
   }
 
   async function enterFullscreen() {
@@ -90,20 +99,26 @@ export function TempChart({ container }: TempChartProps): {
     fsBtn.innerHTML = '&#10060;'; // ✕ 退出
     fsBtn.title = '退出全屏';
     fsBtn.setAttribute('aria-label', '退出全屏');
-    // 优先原生 Fullscreen API（隐藏地址栏，体验最佳；iOS Safari 对非 video 元素不支持，会抛错，降级到 CSS fixed overlay）
+    // 优先原生 Fullscreen API（隐藏地址栏；iOS Safari 对非 video 元素不支持，降级到 CSS fixed overlay）
     const el = container as HTMLElement & { requestFullscreen?: () => Promise<void> };
     if (typeof el.requestFullscreen === 'function') {
-      try { await el.requestFullscreen(); } catch { /* 降级：仅靠 CSS 类的 fixed inset:0 模拟全屏 */ }
+      try { await el.requestFullscreen(); } catch { /* 降级 */ }
     }
-    // 旋转后尺寸变化，下一帧 resize 让 ECharts 重排
-    requestAnimationFrame(() => chart?.resize());
+    // 尝试锁横屏（Android Chrome 在 fullscreen 下有效；iOS 抛 NotSupportedError，忽略）
+    try {
+      const orient = (screen as Screen & { orientation?: { lock?: (o: string) => Promise<void> } }).orientation;
+      await orient?.lock?.('landscape');
+    } catch { /* iOS 不支持，靠 CSS rotate + 监听视口变化兜底 */ }
+    applyFullscreenLayout();
   }
 
   async function exitFullscreen() {
     container.classList.remove('fullscreen-landscape');
+    container.classList.remove('is-landscape-viewport');
     fsBtn.innerHTML = '&#10548;';
     fsBtn.title = '横屏全屏查看';
     fsBtn.setAttribute('aria-label', '横屏全屏查看');
+    try { (screen as any).orientation?.unlock?.(); } catch { /* ignore */ }
     if (document.fullscreenElement) {
       try { await document.exitFullscreen(); } catch { /* ignore */ }
     }
@@ -118,6 +133,7 @@ export function TempChart({ container }: TempChartProps): {
   function handleFullscreenChange() {
     if (!document.fullscreenElement && isFullscreen()) {
       container.classList.remove('fullscreen-landscape');
+      container.classList.remove('is-landscape-viewport');
       fsBtn.innerHTML = '&#10548;';
       fsBtn.title = '横屏全屏查看';
       fsBtn.setAttribute('aria-label', '横屏全屏查看');
@@ -125,8 +141,15 @@ export function TempChart({ container }: TempChartProps): {
     }
   }
 
+  // 视口方向变化（系统自动旋转 / orientation.unlock）：重新布局保持横屏姿态
+  function handleOrientationChange() {
+    if (isFullscreen()) applyFullscreenLayout();
+  }
+
   fsBtn.addEventListener('click', toggleFullscreen);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
+  window.addEventListener('resize', handleOrientationChange);
+  window.addEventListener('orientationchange', handleOrientationChange);
 
   function parseYearFromName(name: string): number {
     const m = name.match(/^(\d+)/);
@@ -391,6 +414,8 @@ export function TempChart({ container }: TempChartProps): {
     resizeObserver.disconnect();
     fsBtn.removeEventListener('click', toggleFullscreen);
     document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    window.removeEventListener('resize', handleOrientationChange);
+    window.removeEventListener('orientationchange', handleOrientationChange);
     if (document.fullscreenElement) {
       try { void document.exitFullscreen(); } catch { /* ignore */ }
     }
