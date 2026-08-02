@@ -448,11 +448,11 @@ body {
   width: 100%;
 }
 
-/* 横屏全屏按钮 */
+/* 横屏全屏按钮：非全屏时 absolute 错开 toolbox 下载按钮（right:48），全屏时 fixed 固定右上角 */
 .chart-fullscreen-btn {
   position: absolute;
-  top: 8px;
-  right: 44px;
+  top: 6px;
+  right: 48px;
   z-index: 10;
   width: 28px;
   height: 28px;
@@ -463,7 +463,7 @@ body {
   border-radius: 6px;
   background: var(--surface);
   color: var(--text-h);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;

@@ -40,7 +40,7 @@ export function TempChart({ container }: TempChartProps): {
   fsBtn.className = 'chart-fullscreen-btn';
   fsBtn.title = '横屏全屏查看';
   fsBtn.setAttribute('aria-label', '横屏全屏查看');
-  fsBtn.innerHTML = '&#10548;'; // ↥ 向上右斜箭头，语义"撑满"
+  fsBtn.innerHTML = '&#10562;'; // ⤢ 四向撑满箭头，语义"全屏展开"
   // 挂到 container 而非 wrapper：全屏旋转时 wrapper 会 rotate，按钮需固定在屏幕右上角
   container.appendChild(fsBtn);
 
@@ -49,6 +49,24 @@ export function TempChart({ container }: TempChartProps): {
   const hiddenYears = new Set<number>();
   // 「多年平均」默认隐藏
   let avgHidden = true;
+  // 最近一次 update 的 labels（横轴天数），供全屏切换时重算 dataZoom 默认区间
+  let latestLabels: string[] = [];
+
+  // 按可用宽度与总天数计算 dataZoom 默认显示区间（百分比）
+  // 每个横轴标签(MM-DD)最小可读宽度约 42px；至少 20%，最多 100%
+  function calcDataZoomEnd(totalDays: number, availableWidth: number): number {
+    if (totalDays <= 0) return 100;
+    const minLabelWidth = 42;
+    const usable = Math.max(120, availableWidth - 84); // 减去 grid left/right 近似 padding
+    const visibleDays = Math.floor(usable / minLabelWidth);
+    const end = Math.round((visibleDays / totalDays) * 100);
+    return Math.max(20, Math.min(100, end));
+  }
+
+  // 取当前 container 可用宽度（全屏时为视口宽，非全屏为容器宽）
+  function getChartWidth(): number {
+    return container.getBoundingClientRect().width;
+  }
 
   // 调试钩子：仅在 URL 带 ?debug=chart 时暴露实例，便于 E2E 精确读取 option；生产环境无此参数则完全不生效
   if (typeof location !== 'undefined' && location.search.includes('debug=chart')) {
@@ -91,12 +109,40 @@ export function TempChart({ container }: TempChartProps): {
   function applyFullscreenLayout() {
     const isPortrait = window.innerHeight > window.innerWidth;
     container.classList.toggle('is-landscape-viewport', !isPortrait);
-    requestAnimationFrame(() => chart?.resize());
+    requestAnimationFrame(() => {
+      chart?.resize();
+      // 切换后宽度变化，dataZoom 默认区间需按新宽度重算（竖屏与全屏解耦）
+      resetDataZoom();
+    });
+  }
+
+  // 按当前布局（全屏/非全屏）重算 dataZoom 默认区间并局部更新（不触碰系列/图例）
+  // 全屏时隐藏 toolbox（下载按钮），避免与退出按钮重叠
+  function resetDataZoom() {
+    if (!chart || latestLabels.length === 0) return;
+    const fs = isFullscreen();
+    const isNarrow = window.matchMedia('(max-width: 768px)').matches && !fs;
+    const dzEnd = isNarrow ? calcDataZoomEnd(latestLabels.length, getChartWidth()) : 100;
+    const dataZoom: any[] = [
+      { type: 'inside', start: 0, end: dzEnd, zoomOnMouseWheel: true, moveOnMouseMove: true },
+    ];
+    if (isNarrow) {
+      dataZoom.push({
+        type: 'slider', start: 0, end: dzEnd, height: 18, bottom: 8,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(128,128,128,0.08)',
+        fillerColor: 'rgba(128,128,128,0.2)',
+        handleStyle: { color: getCssVar('--icon') || '#6b7280' },
+        textStyle: { color: getCssVar('--icon') || '#6b7280', fontSize: 11 },
+      });
+    }
+    // 全屏隐藏 toolbox（下载按钮）避免遮挡退出按钮；非全屏恢复
+    chart.setOption({ dataZoom, toolbox: { show: !fs } }, { notMerge: false });
   }
 
   async function enterFullscreen() {
     container.classList.add('fullscreen-landscape');
-    fsBtn.innerHTML = '&#10060;'; // ✕ 退出
+    fsBtn.innerHTML = '&#10006;'; // ✕ 退出（粗体叉，更醒目）
     fsBtn.title = '退出全屏';
     fsBtn.setAttribute('aria-label', '退出全屏');
     // 优先原生 Fullscreen API（隐藏地址栏；iOS Safari 对非 video 元素不支持，降级到 CSS fixed overlay）
@@ -115,14 +161,17 @@ export function TempChart({ container }: TempChartProps): {
   async function exitFullscreen() {
     container.classList.remove('fullscreen-landscape');
     container.classList.remove('is-landscape-viewport');
-    fsBtn.innerHTML = '&#10548;';
+    fsBtn.innerHTML = '&#10562;';
     fsBtn.title = '横屏全屏查看';
     fsBtn.setAttribute('aria-label', '横屏全屏查看');
     try { (screen as any).orientation?.unlock?.(); } catch { /* ignore */ }
     if (document.fullscreenElement) {
       try { await document.exitFullscreen(); } catch { /* ignore */ }
     }
-    requestAnimationFrame(() => chart?.resize());
+    requestAnimationFrame(() => {
+      chart?.resize();
+      resetDataZoom();
+    });
   }
 
   function toggleFullscreen() {
@@ -134,10 +183,13 @@ export function TempChart({ container }: TempChartProps): {
     if (!document.fullscreenElement && isFullscreen()) {
       container.classList.remove('fullscreen-landscape');
       container.classList.remove('is-landscape-viewport');
-      fsBtn.innerHTML = '&#10548;';
+      fsBtn.innerHTML = '&#10562;';
       fsBtn.title = '横屏全屏查看';
       fsBtn.setAttribute('aria-label', '横屏全屏查看');
-      requestAnimationFrame(() => chart?.resize());
+      requestAnimationFrame(() => {
+        chart?.resize();
+        resetDataZoom();
+      });
     }
   }
 
@@ -268,9 +320,9 @@ export function TempChart({ container }: TempChartProps): {
     const legendData: any[] = [...yearNames];
     if (averageLine) legendData.push('多年平均');
 
-    // 移动端竖屏：默认只显示前 60%，留出平移空间 + 底部 slider；全屏横屏 / 桌面：全显，仅 inside 缩放
+    // dataZoom 默认区间按可用宽度与总天数动态计算（非全屏窄屏才显示 slider）
     const isNarrow = window.matchMedia('(max-width: 768px)').matches && !isFullscreen();
-    const dzEnd = isNarrow ? 60 : 100;
+    const dzEnd = isNarrow ? calcDataZoomEnd(labels.length, getChartWidth()) : 100;
     const dataZoom: any[] = [
       { type: 'inside', start: 0, end: dzEnd, zoomOnMouseWheel: true, moveOnMouseMove: true },
     ];
@@ -393,6 +445,7 @@ export function TempChart({ container }: TempChartProps): {
   ) {
     if (data.length === 0) return;
 
+    latestLabels = labels;
     const series = buildSeries(data, tempType, colors, labels, averageLine);
 
     // 依据当前隐藏状态构造 legend.selected（notMerge 会重置选中态，需重建）
