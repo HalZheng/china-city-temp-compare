@@ -311,6 +311,23 @@ footer.className = 'app-footer';
 footer.innerHTML = '<p>数据来源: <a href="https://open-meteo.com/" target="_blank">Open-Meteo</a></p>';
 app.appendChild(footer);
 
+// 回到顶部按钮：滚动超过一屏后出现，点击平滑滚回顶部
+const backToTopBtn = document.createElement('button');
+backToTopBtn.type = 'button';
+backToTopBtn.className = 'back-to-top-btn';
+backToTopBtn.title = '回到顶部';
+backToTopBtn.setAttribute('aria-label', '回到顶部');
+backToTopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>';
+document.body.appendChild(backToTopBtn);
+
+backToTopBtn.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+window.addEventListener('scroll', () => {
+  backToTopBtn.classList.toggle('visible', window.scrollY > window.innerHeight * 0.5);
+}, { passive: true });
+
 // 错误/提示横幅
 const messageEl = document.createElement('div');
 messageEl.className = 'message-banner';

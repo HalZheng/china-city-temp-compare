@@ -40,8 +40,12 @@ export function TempChart({ container }: TempChartProps): {
   fsBtn.className = 'chart-fullscreen-btn';
   fsBtn.title = '横屏全屏查看';
   fsBtn.setAttribute('aria-label', '横屏全屏查看');
-  fsBtn.innerHTML = '&#10562;'; // ⤢ 四向撑满箭头，语义"全屏展开"
-  // 挂到 container 而非 wrapper：全屏旋转时 wrapper 会 rotate，按钮需固定在屏幕右上角
+  // 标准全屏图标：矩形四角箭头向外（expand）；退出时换四角箭头向内（compress）
+  // 使用 Material Design filled 图标，四角箭头形状更直观
+  const ICON_EXPAND = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>';
+  const ICON_COMPRESS = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>';
+  fsBtn.innerHTML = ICON_EXPAND;
+  // 挂到 container 而非 wrapper：全屏旋转时 wrapper 会 rotate，按钮需固定位置
   container.appendChild(fsBtn);
 
   let chart: EChartsInstance | null = null;
@@ -53,14 +57,14 @@ export function TempChart({ container }: TempChartProps): {
   let latestLabels: string[] = [];
 
   // 按可用宽度与总天数计算 dataZoom 默认显示区间（百分比）
-  // 每个横轴标签(MM-DD)最小可读宽度约 42px；至少 20%，最多 100%
+  // 每个横轴标签(MM-DD)最小可读宽度约 24px；至少 15%，最多 100%
   function calcDataZoomEnd(totalDays: number, availableWidth: number): number {
     if (totalDays <= 0) return 100;
-    const minLabelWidth = 42;
-    const usable = Math.max(120, availableWidth - 84); // 减去 grid left/right 近似 padding
+    const minLabelWidth = 24;
+    const usable = Math.max(120, availableWidth - 40); // 减去 grid left/right 近似 padding
     const visibleDays = Math.floor(usable / minLabelWidth);
     const end = Math.round((visibleDays / totalDays) * 100);
-    return Math.max(20, Math.min(100, end));
+    return Math.max(15, Math.min(100, end));
   }
 
   // 取当前 container 可用宽度（全屏时为视口宽，非全屏为容器宽）
@@ -117,7 +121,7 @@ export function TempChart({ container }: TempChartProps): {
   }
 
   // 按当前布局（全屏/非全屏）重算 dataZoom 默认区间并局部更新（不触碰系列/图例）
-  // 全屏时隐藏 toolbox（下载按钮），避免与退出按钮重叠
+  // 使用 replaceMerge 完全替换 dataZoom 组件，确保全屏(1项)↔窄屏(2项)切换时项目数正确
   function resetDataZoom() {
     if (!chart || latestLabels.length === 0) return;
     const fs = isFullscreen();
@@ -136,13 +140,12 @@ export function TempChart({ container }: TempChartProps): {
         textStyle: { color: getCssVar('--icon') || '#6b7280', fontSize: 11 },
       });
     }
-    // 全屏隐藏 toolbox（下载按钮）避免遮挡退出按钮；非全屏恢复
-    chart.setOption({ dataZoom, toolbox: { show: !fs } }, { notMerge: false });
+    chart.setOption({ dataZoom }, { replaceMerge: ['dataZoom'] } as any);
   }
 
   async function enterFullscreen() {
     container.classList.add('fullscreen-landscape');
-    fsBtn.innerHTML = '&#10006;'; // ✕ 退出（粗体叉，更醒目）
+    fsBtn.innerHTML = ICON_COMPRESS;
     fsBtn.title = '退出全屏';
     fsBtn.setAttribute('aria-label', '退出全屏');
     // 优先原生 Fullscreen API（隐藏地址栏；iOS Safari 对非 video 元素不支持，降级到 CSS fixed overlay）
@@ -161,17 +164,19 @@ export function TempChart({ container }: TempChartProps): {
   async function exitFullscreen() {
     container.classList.remove('fullscreen-landscape');
     container.classList.remove('is-landscape-viewport');
-    fsBtn.innerHTML = '&#10562;';
+    fsBtn.innerHTML = ICON_EXPAND;
     fsBtn.title = '横屏全屏查看';
     fsBtn.setAttribute('aria-label', '横屏全屏查看');
     try { (screen as any).orientation?.unlock?.(); } catch { /* ignore */ }
     if (document.fullscreenElement) {
       try { await document.exitFullscreen(); } catch { /* ignore */ }
     }
-    requestAnimationFrame(() => {
+    // 用 setTimeout 等待浏览器全屏退出动画完成后再 resize + 重算 dataZoom
+    // 双 rAF 在某些浏览器上不够，原生全屏退出有视觉过渡，容器宽度可能尚未稳定
+    setTimeout(() => {
       chart?.resize();
       resetDataZoom();
-    });
+    }, 150);
   }
 
   function toggleFullscreen() {
@@ -183,13 +188,13 @@ export function TempChart({ container }: TempChartProps): {
     if (!document.fullscreenElement && isFullscreen()) {
       container.classList.remove('fullscreen-landscape');
       container.classList.remove('is-landscape-viewport');
-      fsBtn.innerHTML = '&#10562;';
+      fsBtn.innerHTML = ICON_EXPAND;
       fsBtn.title = '横屏全屏查看';
       fsBtn.setAttribute('aria-label', '横屏全屏查看');
-      requestAnimationFrame(() => {
+      setTimeout(() => {
         chart?.resize();
         resetDataZoom();
-      });
+      }, 150);
     }
   }
 
