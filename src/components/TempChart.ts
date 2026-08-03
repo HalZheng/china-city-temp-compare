@@ -134,24 +134,29 @@ export function TempChart({ container }: TempChartProps): {
 
   // 按当前布局（全屏/非全屏）重算 dataZoom 默认区间并局部更新（不触碰系列/图例）
   // 使用 replaceMerge 完全替换 dataZoom 组件，确保全屏(1项)↔窄屏(2项)切换时项目数正确
+  // 桌面模式不启用 dataZoom：宽度足够完整显示，且避免 inside 劫持滚轮影响页面滚动
+  // 移动端窄屏：inside（触摸缩放/拖拽）+ slider（可视化提示）双组件
   function resetDataZoom() {
     if (!chart || latestLabels.length === 0) return;
     const fs = isFullscreen();
     const isNarrow = window.matchMedia('(max-width: 768px)').matches && !fs;
-    const dzEnd = isNarrow ? calcDataZoomEnd(latestLabels.length, getChartWidth()) : 100;
+    if (!isNarrow) {
+      // 桌面/全屏横屏：移除 dataZoom，滚轮回归页面滚动
+      chart.setOption({ dataZoom: [] }, { replaceMerge: ['dataZoom'] } as any);
+      return;
+    }
+    const dzEnd = calcDataZoomEnd(latestLabels.length, getChartWidth());
     const dataZoom: any[] = [
       { type: 'inside', start: 0, end: dzEnd, zoomOnMouseWheel: true, moveOnMouseMove: true },
-    ];
-    if (isNarrow) {
-      dataZoom.push({
+      {
         type: 'slider', start: 0, end: dzEnd, height: 18, bottom: 8,
         borderColor: 'transparent',
         backgroundColor: 'rgba(128,128,128,0.08)',
         fillerColor: 'rgba(128,128,128,0.2)',
         handleStyle: { color: getCssVar('--icon') || '#6b7280' },
         textStyle: { color: getCssVar('--icon') || '#6b7280', fontSize: 11 },
-      });
-    }
+      },
+    ];
     chart.setOption({ dataZoom }, { replaceMerge: ['dataZoom'] } as any);
   }
 
@@ -353,25 +358,27 @@ export function TempChart({ container }: TempChartProps): {
     const legendData: any[] = [...yearNames];
     if (averageLine) legendData.push('多年平均');
 
-    // dataZoom 默认区间按可用宽度与总天数动态计算（非全屏窄屏才显示 slider）
+    // dataZoom 默认区间按可用宽度与总天数动态计算
+    // 桌面模式不启用 dataZoom（宽度足够，避免 inside 劫持滚轮）；移动端窄屏才配置 inside + slider
     const isNarrow = window.matchMedia('(max-width: 768px)').matches && !isFullscreen();
-    const dzEnd = isNarrow ? calcDataZoomEnd(labels.length, getChartWidth()) : 100;
-    const dataZoom: any[] = [
-      { type: 'inside', start: 0, end: dzEnd, zoomOnMouseWheel: true, moveOnMouseMove: true },
-    ];
+    const dataZoom: any[] = [];
     if (isNarrow) {
-      dataZoom.push({
-        type: 'slider',
-        start: 0,
-        end: dzEnd,
-        height: 18,
-        bottom: 8,
-        borderColor: 'transparent',
-        backgroundColor: 'rgba(128,128,128,0.08)',
-        fillerColor: 'rgba(128,128,128,0.2)',
-        handleStyle: { color: cMuted },
-        textStyle: { color: cMuted, fontSize: 11 },
-      });
+      const dzEnd = calcDataZoomEnd(labels.length, getChartWidth());
+      dataZoom.push(
+        { type: 'inside', start: 0, end: dzEnd, zoomOnMouseWheel: true, moveOnMouseMove: true },
+        {
+          type: 'slider',
+          start: 0,
+          end: dzEnd,
+          height: 18,
+          bottom: 8,
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(128,128,128,0.08)',
+          fillerColor: 'rgba(128,128,128,0.2)',
+          handleStyle: { color: cMuted },
+          textStyle: { color: cMuted, fontSize: 11 },
+        },
+      );
     }
 
     return {
