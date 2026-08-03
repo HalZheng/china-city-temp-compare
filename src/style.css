@@ -448,11 +448,12 @@ body {
   width: 100%;
 }
 
-/* 横屏全屏按钮：非全屏时 absolute 错开 toolbox 下载按钮（right:48），全屏时 fixed 右下角（下载按钮旋转后在左上角，互不重叠） */
+/* 下载按钮与全屏按钮：非全屏时 absolute 分列左上/右上角；全屏时 fixed 固定左上/右下角
+   两个按钮都挂在 container 上（非 wrapper），不随 CSS rotate 旋转，位置始终直观 */
+.chart-download-btn,
 .chart-fullscreen-btn {
   position: absolute;
   top: 6px;
-  right: 48px;
   z-index: 10;
   width: 28px;
   height: 28px;
@@ -468,6 +469,9 @@ body {
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
 }
+.chart-download-btn { left: 12px; }
+.chart-fullscreen-btn { right: 12px; }
+.chart-download-btn:hover,
 .chart-fullscreen-btn:hover {
   background: var(--accent-bg);
 }
@@ -494,6 +498,12 @@ body {
   width: 100%;
   height: 100%;
   transform: translate(-50%, -50%);
+}
+.chart-container.fullscreen-landscape .chart-download-btn {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
 }
 .chart-container.fullscreen-landscape .chart-fullscreen-btn {
   position: fixed;

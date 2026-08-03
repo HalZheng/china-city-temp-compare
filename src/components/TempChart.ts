@@ -48,6 +48,16 @@ export function TempChart({ container }: TempChartProps): {
   // 挂到 container 而非 wrapper：全屏旋转时 wrapper 会 rotate，按钮需固定位置
   container.appendChild(fsBtn);
 
+  // 下载图表按钮：独立 DOM 不随 wrapper 旋转，全屏/非全屏均在左上角
+  const downloadBtn = document.createElement('button');
+  downloadBtn.type = 'button';
+  downloadBtn.className = 'chart-download-btn';
+  downloadBtn.title = '保存为图片';
+  downloadBtn.setAttribute('aria-label', '保存为图片');
+  const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
+  downloadBtn.innerHTML = ICON_DOWNLOAD;
+  container.appendChild(downloadBtn);
+
   let chart: EChartsInstance | null = null;
   // 以「年份整数」为 key 记录被隐藏的系列，跨 tempType 切换 / 重查询保持稳定
   const hiddenYears = new Set<number>();
@@ -55,6 +65,8 @@ export function TempChart({ container }: TempChartProps): {
   let avgHidden = true;
   // 最近一次 update 的 labels（横轴天数），供全屏切换时重算 dataZoom 默认区间
   let latestLabels: string[] = [];
+  // 最近一次 update 的城市名，供下载按钮命名文件
+  let latestCityName = '';
 
   // 按可用宽度与总天数计算 dataZoom 默认显示区间（百分比）
   // 每个横轴标签(MM-DD)最小可读宽度约 24px；至少 15%，最多 100%
@@ -203,7 +215,24 @@ export function TempChart({ container }: TempChartProps): {
     if (isFullscreen()) applyFullscreenLayout();
   }
 
+  // 下载图表为 PNG：调用 ECharts getDataURL，文件名含城市名
+  function handleDownload() {
+    if (!chart) return;
+    const url = chart.getDataURL({
+      type: 'png',
+      pixelRatio: 2,
+      backgroundColor: getCssVar('--surface') || '#ffffff',
+    });
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${latestCityName}_气温对比.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
   fsBtn.addEventListener('click', toggleFullscreen);
+  downloadBtn.addEventListener('click', handleDownload);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
   window.addEventListener('resize', handleOrientationChange);
   window.addEventListener('orientationchange', handleOrientationChange);
@@ -318,7 +347,6 @@ export function TempChart({ container }: TempChartProps): {
     const cText = getCssVar('--text') || '#374151';
     const cMuted = getCssVar('--icon') || '#6b7280';
     const cBorder = getCssVar('--border') || '#e5e7eb';
-    const cSurface = getCssVar('--surface') || '#ffffff';
 
     // 图例只包含真实系列；均值口径作为标题副文案，避免伪系列触发 ECharts 告警。
     const yearNames = data.map((yd) => `${yd.year}`);
@@ -397,18 +425,6 @@ export function TempChart({ container }: TempChartProps): {
           },
         },
       },
-      toolbox: {
-        right: 12,
-        top: 6,
-        feature: {
-          saveAsImage: {
-            name: `${cityName}_气温对比`,
-            title: '保存为图片',
-            backgroundColor: cSurface,
-            pixelRatio: 2,
-          },
-        },
-      },
       // 图例两行 + 说明文字占用更多顶部空间，grid.top 相应下调
       // 移动端竖屏：底部预留 dataZoom slider 空间；全屏横屏 / 桌面：无需 slider
       grid: { top: 124, left: 56, right: 28, bottom: isNarrow ? 80 : 48, containLabel: false },
@@ -451,6 +467,7 @@ export function TempChart({ container }: TempChartProps): {
     if (data.length === 0) return;
 
     latestLabels = labels;
+    latestCityName = cityName;
     const series = buildSeries(data, tempType, colors, labels, averageLine);
 
     // 依据当前隐藏状态构造 legend.selected（notMerge 会重置选中态，需重建）
@@ -471,6 +488,7 @@ export function TempChart({ container }: TempChartProps): {
   function destroy() {
     resizeObserver.disconnect();
     fsBtn.removeEventListener('click', toggleFullscreen);
+    downloadBtn.removeEventListener('click', handleDownload);
     document.removeEventListener('fullscreenchange', handleFullscreenChange);
     window.removeEventListener('resize', handleOrientationChange);
     window.removeEventListener('orientationchange', handleOrientationChange);
