@@ -68,15 +68,16 @@ export function DataTable({ container }: DataTableProps): { update: (data: Yearl
     thead.appendChild(headerRow);
     table.appendChild(thead);
 
-    // tbody：用 padding 撑开总高度，仅渲染可见行
+    // tbody：用双 spacer 撑开滚动区，仅渲染可见行。
+    // 两个 spacer 高度由 renderVisible 动态计算（top=startIndex*ROW_HEIGHT，bottom=(total-endIndex)*ROW_HEIGHT），
+    // 确保 tbody 总高度恒等于 allRows.length * ROW_HEIGHT，避免滚动到底出现空白。
     scrollTbody = document.createElement('tbody');
     scrollTbody.style.position = 'relative';
-    // 用 spacer tr 撑开滚动区
     const spacerTop = document.createElement('tr');
     spacerTop.style.height = '0';
     spacerTop.appendChild(document.createElement('td'));
     const spacerBottom = document.createElement('tr');
-    spacerBottom.style.height = `${totalHeight}px`;
+    spacerBottom.style.height = `${totalHeight}px`; // 初始值，renderVisible(0) 会立即重算
     spacerBottom.appendChild(document.createElement('td'));
     scrollTbody.appendChild(spacerTop);
     scrollTbody.appendChild(spacerBottom);
@@ -110,9 +111,12 @@ export function DataTable({ container }: DataTableProps): { update: (data: Yearl
       scrollTbody.removeChild(scrollTbody.childNodes[1] as ChildNode);
     }
 
-    // 设置 top spacer 高度
+    // 同步更新双 spacer 高度，使 tbody 总高度恒等于 allRows.length * ROW_HEIGHT
+    // 旧实现只更新 top spacer，bottom spacer 始终保持 totalHeight，导致随滚动 tbody 高度不断膨胀、底部出现空白
     const spacerTop = scrollTbody.firstChild as HTMLTableRowElement;
+    const spacerBottom = scrollTbody.lastChild as HTMLTableRowElement;
     spacerTop.style.height = `${startIndex * ROW_HEIGHT}px`;
+    spacerBottom.style.height = `${(allRows.length - endIndex) * ROW_HEIGHT}px`;
 
     // 渲染可见行
     for (let i = startIndex; i < endIndex; i++) {

@@ -1,7 +1,7 @@
 # 缺陷分析报告
 
 > 当前实现：Vite + TypeScript + ECharts，Open-Meteo 数据源
-> 更新日期：2026-07-31
+> 更新日期：2026-08-04
 
 ## 当前状态
 
@@ -16,16 +16,27 @@
 - 预报失败明确提示；详情表标明最高/最低和预报数据。
 - 图表已迁移至 ECharts，系列显隐按年份保存，日值曲线不使用平滑插值。
 - 新增 Vitest 回归测试，覆盖闰日、跨年标签和逐年统计口径。
+- **修复 DataTable 虚拟滚动 `spacerBottom` 高度未动态更新 bug**：旧实现只更新 `spacerTop`，`spacerBottom` 始终保持初始 `totalHeight`，导致 `tbody` 高度随滚动不断膨胀、底部出现空白。改为在 `renderVisible` 中同步更新双 spacer（top=startIndex\*ROW_HEIGHT，bottom=(total-endIndex)\*ROW_HEIGHT），确保 `tbody` 总高度恒等于 `allRows.length * ROW_HEIGHT`。
+- **拆分 `main.ts`**：原 700 行单文件拆为 `theme.ts` / `message.ts` / `skeleton.ts` / `router.ts` / `geolocation.ts` / `render.ts` / `query.ts` 7 个模块，`main.ts` 降至 280 行，仅负责组件装配。
+- **抽出 `renderAll` 统一渲染入口**：`handleQuery` 成功路径与 `setTempType` 不再各自手动调用 4 个组件 `update`，统一走 `createRenderAll`；`setTempType` 传 `{ skipTable: true }` 跳过表格重渲染（表格同时显示 max/min）。消除旧实现"巧合性正确"隐患（`setTempType` 未调 `dataTable.update`，仅因表格同时显示 max/min 才无 bug）。
+- **城市选择后自动查询**：`CascaderCitySearch` 的 `onSelect` 回调在更新 `state.city` 后立即触发 `handleQuery()`，与定位成功行为一致。年份/日期变更仍需手动点查询按钮（避免每次勾选都发请求）。
+- **失败年份一键重试**：查询失败时错误横幅内嵌"重试失败年份"按钮，点击后仅重发失败年份（不重发已成功年份），复用 LRUCache（archive 永久缓存，重试可能直接命中）。成功结果合并回 `state.yearlyData`，仍失败的保留在横幅中。
+- **新增 `fetchYearData` 单测**（9 用例）：覆盖纯历史段/纯未来段/跨年两段/历史+未来混合/forecast 失败保留历史/segEnd 超 horizon 触发 truncated/segEnd 在 horizon 内不 truncated/跨年段含历史+未来分流/AbortSignal 中止。
+- **新增 DataTable 虚拟滚动测试**（5 用例，jsdom 环境）：验证初始渲染/中间/底部双 spacer 高度、`tbody` 总高度恒等于 `allRows.length * ROW_HEIGHT` 的核心不变量、可见行数不超过 `endIndex-startIndex`。
 
 当前剩余风险：
 
 | 优先级 | 项目 | 说明 |
 |---|---|---|
 | P2 | 区县坐标依赖第三方地理编码 | 少数区县可能退化到城市中心坐标，建议后续引入带行政区代码的坐标数据源。 |
-| P2 | 无失败年份一键重试 | 当前会显示失败原因，用户需要再次点击查询。 |
 | P2 | 主包体积较大 | 生产 JS 约 1.13 MB，移动网络下可继续做组件和数据分包。 |
-| P3 | 无 CI | 已有本地测试脚本，但尚未配置自动执行 `npm test` 与 `npm run build`。 |
+| P3 | 无 CI | 已有本地测试脚本（41 用例），但尚未配置自动执行 `npm test` 与 `npm run build`。 |
 | P3 | 查询偏好不做本地持久化 | URL 已可复现成功查询；未查询的控件变化不会跨刷新保存。 |
+| P3 | 组件交互层测试仍不足 | `fetchYearData` 与 `DataTable` 已补单测，但 `renderAll`/`queryHandler`/`router` 等装配层逻辑无测试，依赖手动验证。 |
+
+### 复核记录
+
+- **`truncated` 误报（已撤回）**：初审曾怀疑 `fetchYearData` 中 `if (segEnd > horizonStr) truncated = true` 会因历史段误标记。经逐场景推演（纯历史段、纯未来段、跨年两段、超 horizon）确认逻辑正确：历史段 `segEnd <= todayStr < horizonStr`，故 `segEnd > horizonStr` 恒为 false；未来段 `segEnd > horizonStr` 时确实有部分日期超出预报上限，`truncated = true` 正确。非 bug，无代码改动。
 
 ---
 
