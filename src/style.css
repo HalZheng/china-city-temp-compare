@@ -500,15 +500,16 @@ body {
   height: 100%;
   transform: translate(-50%, -50%);
 }
-/* 按钮 fixed 到屏幕物理角落：用户横持手机时，物理角落即横屏视角的角落 */
+/* 按钮 absolute 相对 container（container 已 fixed 铺满视口）。
+   不用 fixed：微信浏览器 X5 内核对 fixed-in-fixed 处理有兼容性问题 */
 .chart-container.fullscreen-landscape .chart-download-btn {
-  position: fixed;
+  position: absolute;
   top: 12px;
   left: 12px;
   z-index: 20;
 }
 .chart-container.fullscreen-landscape .chart-fullscreen-btn {
-  position: fixed;
+  position: absolute;
   top: 12px;
   right: 12px;
   z-index: 20;
