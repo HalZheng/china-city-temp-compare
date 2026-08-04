@@ -448,8 +448,8 @@ body {
   width: 100%;
 }
 
-/* 下载按钮与全屏按钮：非全屏时 absolute 分列左上/右上角；全屏时 fixed 固定左上/右下角
-   两个按钮都挂在 container 上（非 wrapper），不随 CSS rotate 旋转，位置始终直观 */
+/* 下载按钮与全屏按钮：absolute 定位到 wrapper 角落
+   按钮在 wrapper 内部，全屏时随 wrapper 一起旋转，自然落在横屏视角的角落 */
 .chart-download-btn,
 .chart-fullscreen-btn {
   position: absolute;
@@ -500,16 +500,14 @@ body {
   height: 100%;
   transform: translate(-50%, -50%);
 }
-/* 按钮 absolute 相对 container（container 已 fixed 铺满视口）。
-   不用 fixed：微信浏览器 X5 内核对 fixed-in-fixed 处理有兼容性问题 */
+/* 全屏时按钮位置：wrapper 旋转后，按钮在 wrapper 内用 absolute 定位到角落
+   top/left/right 是相对旋转后的 wrapper 坐标系，即横屏视角的角落 */
 .chart-container.fullscreen-landscape .chart-download-btn {
-  position: absolute;
   top: 12px;
   left: 12px;
   z-index: 20;
 }
 .chart-container.fullscreen-landscape .chart-fullscreen-btn {
-  position: absolute;
   top: 12px;
   right: 12px;
   z-index: 20;

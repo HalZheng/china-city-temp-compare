@@ -53,9 +53,9 @@ export function TempChart({ container }: TempChartProps): {
   downloadBtn.setAttribute('aria-label', '保存为图片');
   const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
   downloadBtn.innerHTML = ICON_DOWNLOAD;
-  // 两个按钮挂到 container（非 wrapper）：全屏时 wrapper 旋转，按钮保持在视口角落不旋转
-  container.appendChild(fsBtn);
-  container.appendChild(downloadBtn);
+  // 两个按钮挂到 wrapper 内：全屏时随 wrapper 一起旋转，自然落在横屏视角的角落
+  wrapper.appendChild(fsBtn);
+  wrapper.appendChild(downloadBtn);
 
   let chart: EChartsInstance | null = null;
   // 以「年份整数」为 key 记录被隐藏的系列，跨 tempType 切换 / 重查询保持稳定
