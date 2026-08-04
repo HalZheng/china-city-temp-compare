@@ -45,10 +45,7 @@ export function TempChart({ container }: TempChartProps): {
   const ICON_EXPAND = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>';
   const ICON_COMPRESS = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>';
   fsBtn.innerHTML = ICON_EXPAND;
-  // 挂到 container 而非 wrapper：全屏旋转时 wrapper 会 rotate，按钮需固定位置
-  container.appendChild(fsBtn);
-
-  // 下载图表按钮：独立 DOM 不随 wrapper 旋转，全屏/非全屏均在左上角
+  // 下载图表按钮：独立 DOM 按钮，通过 chart.getDataURL 导出 PNG
   const downloadBtn = document.createElement('button');
   downloadBtn.type = 'button';
   downloadBtn.className = 'chart-download-btn';
@@ -56,6 +53,8 @@ export function TempChart({ container }: TempChartProps): {
   downloadBtn.setAttribute('aria-label', '保存为图片');
   const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
   downloadBtn.innerHTML = ICON_DOWNLOAD;
+  // 两个按钮挂到 container（非 wrapper）：全屏时 wrapper 旋转，按钮保持在视口角落不旋转
+  container.appendChild(fsBtn);
   container.appendChild(downloadBtn);
 
   let chart: EChartsInstance | null = null;
@@ -116,6 +115,12 @@ export function TempChart({ container }: TempChartProps): {
   }
 
   // ===== 横屏全屏：CSS transform 旋转绕开 screen.orientation.lock（iOS 不支持）=====
+  // 全屏时把 container 临时 reparent 到 document.body，脱离 #app 的 stacking context
+  // （iOS Safari 对非 video 元素不支持 requestFullscreen，fixed + z-index 会被 #app 限制层级）
+  let fsPlaceholder: Comment | null = null;
+  let fsParent: HTMLElement | null = null;
+  let fsNextSibling: Node | null = null;
+
   function isFullscreen() {
     return container.classList.contains('fullscreen-landscape');
   }
@@ -160,11 +165,28 @@ export function TempChart({ container }: TempChartProps): {
     chart.setOption({ dataZoom }, { replaceMerge: ['dataZoom'] } as any);
   }
 
+  // 还原 container 到原位置（reparent 回 #app），并清理占位符
+  function restoreContainer() {
+    if (fsPlaceholder && fsPlaceholder.parentNode) {
+      fsParent?.insertBefore(container, fsNextSibling);
+      fsPlaceholder.parentNode.removeChild(fsPlaceholder);
+      fsPlaceholder = null;
+      fsParent = null;
+      fsNextSibling = null;
+    }
+  }
+
   async function enterFullscreen() {
     container.classList.add('fullscreen-landscape');
     fsBtn.innerHTML = ICON_COMPRESS;
     fsBtn.title = '退出全屏';
     fsBtn.setAttribute('aria-label', '退出全屏');
+    // reparent 到 body：脱离 #app 的 stacking context，确保 iOS Safari 下 fixed + z-index 能盖住整页
+    fsParent = container.parentElement;
+    fsNextSibling = container.nextSibling;
+    fsPlaceholder = document.createComment('chart-container-placeholder');
+    container.parentElement?.insertBefore(fsPlaceholder, container);
+    document.body.appendChild(container);
     // 优先原生 Fullscreen API（隐藏地址栏；iOS Safari 对非 video 元素不支持，降级到 CSS fixed overlay）
     const el = container as HTMLElement & { requestFullscreen?: () => Promise<void> };
     if (typeof el.requestFullscreen === 'function') {
@@ -188,8 +210,9 @@ export function TempChart({ container }: TempChartProps): {
     if (document.fullscreenElement) {
       try { await document.exitFullscreen(); } catch { /* ignore */ }
     }
+    // reparent 回原位置
+    restoreContainer();
     // 用 setTimeout 等待浏览器全屏退出动画完成后再 resize + 重算 dataZoom
-    // 双 rAF 在某些浏览器上不够，原生全屏退出有视觉过渡，容器宽度可能尚未稳定
     setTimeout(() => {
       chart?.resize();
       resetDataZoom();
@@ -208,6 +231,7 @@ export function TempChart({ container }: TempChartProps): {
       fsBtn.innerHTML = ICON_EXPAND;
       fsBtn.title = '横屏全屏查看';
       fsBtn.setAttribute('aria-label', '横屏全屏查看');
+      restoreContainer();
       setTimeout(() => {
         chart?.resize();
         resetDataZoom();

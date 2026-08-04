@@ -476,8 +476,9 @@ body {
   background: var(--accent-bg);
 }
 
-/* 横屏全屏：容器铺满视口；wrapper 用 dvh/dvw 取视口尺寸并旋转居中
-   （竖屏视口：宽高互换 + rotate -90°；系统已横屏：JS 加 is-landscape-viewport 类，不旋转直接铺满）*/
+/* 横屏全屏：容器 fixed 铺满视口；wrapper 用 dvh/dvw 取视口尺寸并旋转居中
+   竖屏视口：宽高互换 + rotate 90deg（逆时针，横轴落在竖屏左边缘，符合右手横持直觉）
+   系统已横屏：JS 加 is-landscape-viewport 类，不旋转直接铺满 */
 .chart-container.fullscreen-landscape {
   position: fixed;
   inset: 0;
@@ -491,7 +492,7 @@ body {
   left: 50%;
   width: 100dvh;
   height: 100dvw;
-  transform: translate(-50%, -50%) rotate(-90deg);
+  transform: translate(-50%, -50%) rotate(90deg);
   transform-origin: center center;
 }
 .chart-container.fullscreen-landscape.is-landscape-viewport .chart-wrapper {
@@ -499,6 +500,7 @@ body {
   height: 100%;
   transform: translate(-50%, -50%);
 }
+/* 按钮 fixed 到屏幕物理角落：用户横持手机时，物理角落即横屏视角的角落 */
 .chart-container.fullscreen-landscape .chart-download-btn {
   position: fixed;
   top: 12px;
@@ -507,7 +509,7 @@ body {
 }
 .chart-container.fullscreen-landscape .chart-fullscreen-btn {
   position: fixed;
-  bottom: 12px;
+  top: 12px;
   right: 12px;
   z-index: 20;
 }
