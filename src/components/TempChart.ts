@@ -32,6 +32,8 @@ export function TempChart({ container }: TempChartProps): {
   // ECharts 容器必须是带显式尺寸的 <div>（由 CSS 控制高度）
   const chartEl = document.createElement('div');
   chartEl.className = 'temp-chart';
+  chartEl.setAttribute('role', 'img');
+  chartEl.setAttribute('aria-label', '气温曲线图，详细数值见下方数据表');
   wrapper.appendChild(chartEl);
 
   // 横屏全屏按钮：CSS transform 旋转绕开系统方向锁，iOS 降级为 fixed overlay

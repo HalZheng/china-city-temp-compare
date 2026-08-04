@@ -65,7 +65,7 @@ export function buildMonthDayLabels(startMonthDay: string, endMonthDay: string):
     pushRange(new Date(`2000-${startMonthDay}`), new Date(`2000-${endMonthDay}`));
   } else {
     pushRange(new Date(`2000-${startMonthDay}`), new Date(`2000-12-31`));
-    pushRange(new Date(`2001-01-01`), new Date(`2001-${endMonthDay}`));
+    pushRange(new Date(`2000-01-01`), new Date(`2000-${endMonthDay}`));
   }
   return labels;
 }

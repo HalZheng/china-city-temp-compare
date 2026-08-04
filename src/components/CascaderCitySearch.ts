@@ -18,6 +18,7 @@ export interface CascaderCitySearchProps {
 export interface CascaderCitySearchInstance {
   element: HTMLElement;
   update: (city: City) => City;
+  destroy: () => void;
 }
 
 /** pca.json 结构：省 -> 市 -> 区县列表 */
@@ -286,6 +287,8 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
   const resultsEl = document.createElement('div');
   resultsEl.className = 'city-search__results';
   resultsEl.style.display = 'none';
+  resultsEl.setAttribute('role', 'listbox');
+  resultsEl.setAttribute('aria-label', '城市搜索结果');
 
   container.append(searchInput, cascader, resultsEl);
 
@@ -409,6 +412,8 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
     currentResults.forEach((e, idx) => {
       const item = document.createElement('div');
       item.className = 'city-search__result';
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', 'false');
       item.setAttribute('data-index', String(idx));
       item.innerHTML = `<span class="city-search__result-name">${e.district}</span><span class="city-search__result-path">${formatPath(e)}</span>`;
       item.addEventListener('click', () => void selectEntry(e));
@@ -422,6 +427,7 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
     const items = resultsEl.querySelectorAll('.city-search__result');
     items.forEach((el, i) => {
       el.classList.toggle('is-active', i === idx);
+      el.setAttribute('aria-selected', i === idx ? 'true' : 'false');
     });
   }
 
@@ -503,11 +509,12 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
     }
   });
 
-  document.addEventListener('click', (e) => {
+  function handleDocumentClick(e: MouseEvent): void {
     if (!container.contains(e.target as Node)) {
       resultsEl.style.display = 'none';
     }
-  });
+  }
+  document.addEventListener('click', handleDocumentClick);
 
   // 初始化省份/城市/区县列表
   renderProvinces();
@@ -551,7 +558,11 @@ export function CascaderCitySearch({ onSelect, defaultCity }: CascaderCitySearch
     return { ...city, name: canonicalName };
   }
 
-  return { element: container, update };
+  function destroy(): void {
+    document.removeEventListener('click', handleDocumentClick);
+  }
+
+  return { element: container, update, destroy };
 }
 
 function formatPath(e: FlatEntry): string {

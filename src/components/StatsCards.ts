@@ -28,15 +28,15 @@ export function StatsCards({ container }: StatsCardsProps): {
     const table = document.createElement('table');
     table.className = 'stats-table';
     table.innerHTML = `<thead><tr>
-      <th>年份</th><th>${tempLabel}均值</th><th>高温日<br>≥35℃</th><th>热夜<br>≥25℃</th>
-      <th>热浪<br>≥3天</th><th>寒潮<br>≥3天</th><th>严寒<br>≤-10℃</th>
-      <th>冰冻日<br>≤0℃</th><th>极端寒夜<br>≤-5℃</th>
+      <th scope="col">年份</th><th scope="col">${tempLabel}均值</th><th scope="col">高温日<br>≥35℃</th><th scope="col">热夜<br>≥25℃</th>
+      <th scope="col">热浪<br>≥3天</th><th scope="col">寒潮<br>≥3天</th><th scope="col">严寒<br>≤-10℃</th>
+      <th scope="col">冰冻日<br>≤0℃</th><th scope="col">极端寒夜<br>≤-5℃</th>
     </tr></thead>`;
     const tbody = document.createElement('tbody');
     for (const summary of summaries) {
       const row = document.createElement('tr');
       const forecastBadge = summary.includesForecast ? '<span class="badge-forecast">含预报</span>' : '';
-      row.innerHTML = `<th><span class="stats-year-dot" style="background:${colors[summary.year] || 'var(--icon)'}"></span>${summary.year}${forecastBadge}</th>
+      row.innerHTML = `<th scope="row"><span class="stats-year-dot" style="background:${colors[summary.year] || 'var(--icon)'}"></span>${summary.year}${forecastBadge}</th>
         <td class="stats-average">${fmt(summary.periodAvg)}</td><td>${summary.hotDays}</td><td>${summary.tropicalNights}</td>
         <td>${summary.heatwaveCount}</td><td>${summary.coldWaveCount}</td><td>${summary.severeColdCount}</td>
         <td>${summary.freezingDays}</td><td>${summary.extremeColdNights}</td>`;

@@ -7,6 +7,7 @@ import { TempChart } from './components/TempChart';
 import { DataTable } from './components/DataTable';
 import { fetchHistoricalWeather, fetchForecastWeather, reverseGeocode, searchCities } from './api/open-meteo';
 import { formatDate, buildMonthDayLabels, isWrappingRange, assignColorsByAverageTemp, getDefaultDateRange, getRecentYears } from './utils/helpers';
+import { pLimit } from './utils/pLimit';
 import { detectHeatwaves, detectColdWaves } from './logic/extremes';
 import { buildYearAverages, buildYearSummaryStats, multiYearDailyAverage } from './logic/stats';
 import { StatsCards } from './components/StatsCards';
@@ -33,6 +34,9 @@ const state: AppState = {
 let currentYearColors: Record<number, string> = {};
 let currentLabels: string[] = [];
 let currentCityName = defaultCity.name;
+// 缓存极端事件检测结果：仅依赖 yearlyData + labels，与 tempType 无关，切 tab 时直接复用
+let cachedHeatwaves: ReturnType<typeof detectHeatwaves> = [];
+let cachedColdWaves: ReturnType<typeof detectColdWaves> = [];
 let activeQueryController: AbortController | null = null;
 let querySequence = 0;
 
@@ -210,13 +214,12 @@ function setTempType(type: TempType) {
   }
   if (state.yearlyData.length > 0) {
     const avgLine = multiYearDailyAverage(state.yearlyData, currentLabels, state.tempType);
-    const heatwaves = detectHeatwaves(state.yearlyData, currentLabels);
-    const coldWaves = detectColdWaves(state.yearlyData, currentLabels);
-    const summaries = buildYearSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
+    // heatwaves/coldWaves 与 tempType 无关，直接复用缓存避免重复计算
+    const summaries = buildYearSummaryStats(state.yearlyData, state.tempType, cachedHeatwaves, cachedColdWaves);
     const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
     chart.update(state.yearlyData, state.tempType, currentYearColors, currentCityName, currentLabels, avgLine, yearAverages);
     statsCards.update(summaries, state.tempType, currentYearColors);
-    extremeCards.update(heatwaves, coldWaves, currentYearColors);
+    extremeCards.update(cachedHeatwaves, cachedColdWaves, currentYearColors);
   }
 }
 
@@ -327,6 +330,12 @@ backToTopBtn.addEventListener('click', () => {
 window.addEventListener('scroll', () => {
   backToTopBtn.classList.toggle('visible', window.scrollY > window.innerHeight * 0.5);
 }, { passive: true });
+
+// 页面卸载时清理资源：图表实例、事件监听器，避免内存泄漏
+window.addEventListener('beforeunload', () => {
+  chart.destroy();
+  citySearch.destroy();
+});
 
 // 错误/提示横幅
 const messageEl = document.createElement('div');
@@ -588,21 +597,25 @@ async function handleQuery() {
 
   const todayStr = formatDate(new Date());
 
-  const promises = query.selectedYears.map(async (year) => {
-    try {
-      return await fetchYearData(query.city, year, query.startMonthDay, query.endMonthDay, todayStr, controller.signal);
-    } catch (error) {
-      if (controller.signal.aborted) throw error;
-      return {
-        year,
-        dates: [],
-        maxTemps: [],
-        minTemps: [],
-        forecastFlags: [],
-        error: error instanceof Error ? error.message : '请求失败',
-      } as YearlyData;
-    }
-  });
+  // 限并发 3：避免多年份同时请求触发 Open-Meteo 429 限流
+  const limiter = pLimit(3);
+  const promises = query.selectedYears.map((year) =>
+    limiter(async () => {
+      try {
+        return await fetchYearData(query.city, year, query.startMonthDay, query.endMonthDay, todayStr, controller.signal);
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        return {
+          year,
+          dates: [],
+          maxTemps: [],
+          minTemps: [],
+          forecastFlags: [],
+          error: error instanceof Error ? error.message : '请求失败',
+        } as YearlyData;
+      }
+    }),
+  );
 
   let results: YearlyData[];
   try {
@@ -641,6 +654,9 @@ async function handleQuery() {
 
     const heatwaves = detectHeatwaves(state.yearlyData, currentLabels);
     const coldWaves = detectColdWaves(state.yearlyData, currentLabels);
+    // 缓存极端事件供 setTempType 复用，避免切 tab 时重复计算
+    cachedHeatwaves = heatwaves;
+    cachedColdWaves = coldWaves;
     const avgLine = multiYearDailyAverage(state.yearlyData, currentLabels, state.tempType);
     const summaries = buildYearSummaryStats(state.yearlyData, state.tempType, heatwaves, coldWaves);
     const yearAverages = buildYearAverages(state.yearlyData, state.tempType);
