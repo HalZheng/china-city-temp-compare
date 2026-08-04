@@ -9,6 +9,9 @@ import {
   DataZoomComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import type { LineSeriesOption } from 'echarts/charts';
+import type { DataZoomComponentOption } from 'echarts/components';
+import type { EChartsCoreOption } from 'echarts/core';
 import type { YearlyData, TempType } from '../types';
 import { getCssVar } from '../utils/helpers';
 
@@ -94,9 +97,10 @@ export function TempChart({ container }: TempChartProps): {
     if (chart) chart.resize();
   });
 
-  // 同步原生图例切换状态，使隐藏状态在 notMerge 重建后得以恢复
-  function handleLegendSelectChanged(params: any) {
-    const sel = params?.selected as Record<string, boolean> | undefined;
+  // 同步原生图例切换状态，使隐藏状态在 notMerge 重建后得以恢复。
+  // ECharts 6 的 chart.on 回调签名是 (...args: unknown[])，无法静态约束 params 形状，运行时按需断言。
+  function handleLegendSelectChanged(params: unknown) {
+    const sel = (params as { selected?: Record<string, boolean> } | null)?.selected;
     if (!sel) return;
     hiddenYears.clear();
     for (const [name, on] of Object.entries(sel)) {
@@ -279,8 +283,8 @@ export function TempChart({ container }: TempChartProps): {
     colors: Record<number, string>,
     labels: string[],
     averageLine?: (number | null)[],
-  ): any[] {
-    const series: any[] = [];
+  ): LineSeriesOption[] {
+    const series: LineSeriesOption[] = [];
 
     for (const yd of data) {
       const temps = tempType === 'max' ? yd.maxTemps : yd.minTemps;
@@ -360,13 +364,13 @@ export function TempChart({ container }: TempChartProps): {
     cityName: string,
     tempType: TempType,
     labels: string[],
-    series: any[],
+    series: LineSeriesOption[],
     colors: Record<number, string>,
     selected: Record<string, boolean>,
     data: YearlyData[],
     averageLine?: (number | null)[],
     yearAverages?: { year: number; average: number | null }[],
-  ): echarts.EChartsCoreOption {
+  ): EChartsCoreOption {
     const tempLabel = tempType === 'max' ? '最高气温对比' : '最低气温对比';
     // 图例左侧说明文字：解释温度数值含义（跟随 tempType 切换）
     const legendCaption = tempType === 'max' ? '区间最高气温均值' : '区间最低气温均值';
@@ -381,13 +385,13 @@ export function TempChart({ container }: TempChartProps): {
 
     // 图例只包含真实系列；均值口径作为标题副文案，避免伪系列触发 ECharts 告警。
     const yearNames = data.map((yd) => `${yd.year}`);
-    const legendData: any[] = [...yearNames];
+    const legendData: string[] = [...yearNames];
     if (averageLine) legendData.push('多年平均');
 
     // dataZoom 默认区间按可用宽度与总天数动态计算
     // 桌面模式不启用 dataZoom（宽度足够，避免 inside 劫持滚轮）；移动端窄屏才配置 inside + slider
     const isNarrow = window.matchMedia('(max-width: 768px)').matches && !isFullscreen();
-    const dataZoom: any[] = [];
+    const dataZoom: DataZoomComponentOption[] = [];
     if (isNarrow) {
       const dzEnd = calcDataZoomEnd(labels.length, getChartWidth());
       dataZoom.push(
@@ -429,7 +433,7 @@ export function TempChart({ container }: TempChartProps): {
         backgroundColor: 'rgba(17, 24, 39, 0.92)',
         borderWidth: 0,
         textStyle: { color: '#ffffff', fontSize: 13 },
-        valueFormatter: (value: any) => (value == null ? '无数据' : `${value}℃`),
+        valueFormatter: (value: number | undefined) => (value == null ? '无数据' : `${value}℃`),
       },
       legend: {
         type: 'scroll',
@@ -506,8 +510,10 @@ export function TempChart({ container }: TempChartProps): {
     // 依据当前隐藏状态构造 legend.selected（notMerge 会重置选中态，需重建）
     const selected: Record<string, boolean> = {};
     for (const s of series) {
-      if (s.name === '多年平均') selected[s.name] = !avgHidden;
-      else selected[s.name] = !hiddenYears.has(parseYearFromName(s.name));
+      const sName = s.name;
+      if (typeof sName !== 'string') continue;
+      if (sName === '多年平均') selected[sName] = !avgHidden;
+      else selected[sName] = !hiddenYears.has(parseYearFromName(sName));
     }
 
     const option = buildOption(cityName, tempType, labels, series, colors, selected, data, averageLine, yearAverages);

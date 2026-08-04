@@ -164,6 +164,26 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
   }
 
   /**
+   * 重算 runtime（labels/颜色/极端事件）并触发渲染。
+   * handleQuery 和 retryFailed 共用，避免两处重复逻辑导致签名漂移。
+   */
+  function updateRuntime(data: YearlyData[], query: { city: City; startMonthDay: string; endMonthDay: string }): void {
+    runtime.currentLabels = buildMonthDayLabels(query.startMonthDay, query.endMonthDay);
+    runtime.currentCityName = query.city.name;
+    // 按区间均值分配颜色（最热红 → 最冷紫）
+    const yearAvgTemps = data.map((r) => {
+      const validMax = r.maxTemps.filter((t): t is number => t !== null);
+      const avgMax = validMax.length > 0 ? validMax.reduce((a, b) => a + b, 0) / validMax.length : 0;
+      return { year: r.year, avgTemp: avgMax };
+    });
+    runtime.currentYearColors = assignColorsByAverageTemp(yearAvgTemps);
+    // 检测极端事件并缓存（与 tempType 无关，切 tab 时复用）
+    runtime.cachedHeatwaves = detectHeatwaves(data, runtime.currentLabels);
+    runtime.cachedColdWaves = detectColdWaves(data, runtime.currentLabels);
+    renderAll();
+  }
+
+  /**
    * 应用查询结果到 state/runtime 并渲染。
    * 返回 { hasData, errors, truncatedYears, forecastErrorYears }。
    */
@@ -180,22 +200,7 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
 
     const hasData = successData.length > 0;
     if (hasData) {
-      runtime.currentLabels = buildMonthDayLabels(query.startMonthDay, query.endMonthDay);
-      runtime.currentCityName = query.city.name;
-
-      // 按区间均值分配颜色（最热红 → 最冷紫）
-      const yearAvgTemps = successData.map((r) => {
-        const validMax = r.maxTemps.filter((t): t is number => t !== null);
-        const avgMax = validMax.length > 0 ? validMax.reduce((a, b) => a + b, 0) / validMax.length : 0;
-        return { year: r.year, avgTemp: avgMax };
-      });
-      runtime.currentYearColors = assignColorsByAverageTemp(yearAvgTemps);
-
-      // 检测极端事件并缓存（与 tempType 无关，切 tab 时复用）
-      runtime.cachedHeatwaves = detectHeatwaves(successData, runtime.currentLabels);
-      runtime.cachedColdWaves = detectColdWaves(successData, runtime.currentLabels);
-
-      renderAll();
+      updateRuntime(successData, query);
     }
 
     return { hasData, errors, truncatedYears, forecastErrorYears };
@@ -234,11 +239,11 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
 
   async function handleQuery(): Promise<void> {
     if (state.selectedYears.length === 0) {
-      alert('请至少选择一个年份');
+      message.show('请至少选择一个年份', 'error');
       return;
     }
     if (!state.startMonthDay || !state.endMonthDay) {
-      alert('请选择日期范围');
+      message.show('请选择日期范围', 'error');
       return;
     }
 
@@ -302,6 +307,7 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
    * - 成功的合并回 state.yearlyData，失败的保留 failedYears
    * - 不动 skeleton（保留当前数据显示），仅 btn disabled
    * - 复用 LRUCache：archive 永久缓存，重试可能直接命中
+   * - 重试成功后重新检测所有年份的 truncated/forecastError 状态并重显提示（避免清空截断信息）
    */
   async function retryFailed(): Promise<void> {
     if (failedYears.length === 0 || !lastQuery) return;
@@ -344,34 +350,38 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
       for (const y of successResults) merged.set(y.year, y);
       state.yearlyData = Array.from(merged.values()).sort((a, b) => a.year - b.year);
 
-      // 重新计算 runtime（颜色/极端事件）
-      runtime.currentLabels = buildMonthDayLabels(lastQuery.startMonthDay, lastQuery.endMonthDay);
-      runtime.currentCityName = lastQuery.city.name;
-      const yearAvgTemps = state.yearlyData.map((r) => {
-        const validMax = r.maxTemps.filter((t): t is number => t !== null);
-        const avgMax = validMax.length > 0 ? validMax.reduce((a, b) => a + b, 0) / validMax.length : 0;
-        return { year: r.year, avgTemp: avgMax };
-      });
-      runtime.currentYearColors = assignColorsByAverageTemp(yearAvgTemps);
-      runtime.cachedHeatwaves = detectHeatwaves(state.yearlyData, runtime.currentLabels);
-      runtime.cachedColdWaves = detectColdWaves(state.yearlyData, runtime.currentLabels);
-
-      renderAll();
+      updateRuntime(state.yearlyData, lastQuery);
     }
 
     // 更新失败年份缓存
     failedYears = stillFailed.map((e) => ({ year: e.year, error: e.error ?? '请求失败' }));
 
+    // 重试后重新检测所有年份的 truncated/forecastError 状态并重显提示（避免清空截断信息）。
+    // 重试的年份可能恰好是 truncated 年份，重试成功后该年份仍应保留截断提示。
+    const allTruncatedYears = state.yearlyData.filter((r) => r.truncated).map((r) => r.year);
+    const allForecastErrorYears = state.yearlyData.filter((r) => r.forecastError).map((r) => r.year);
+
     if (failedYears.length > 0) {
-      message.showWithRetry(
-        `数据获取失败：${failedYears.map((e) => `${e.year}年（${e.error}）`).join('；')}`,
-        () => {
-          void retryFailed();
-        },
+      const messages: string[] = [];
+      messages.push(`数据获取失败：${failedYears.map((e) => `${e.year}年（${e.error}）`).join('；')}`);
+      if (allForecastErrorYears.length > 0) {
+        messages.push(`${allForecastErrorYears.join('、')}年的预报获取失败，已保留历史数据`);
+      }
+      message.showWithRetry(messages.join('。'), () => {
+        void retryFailed();
+      });
+    } else if (allForecastErrorYears.length > 0) {
+      message.show(`${allForecastErrorYears.join('、')}年的预报获取失败，已保留历史数据`, 'error');
+      // 全部失败年份已成功后更新 URL
+      updateUrlFromState(lastQuery, state.tempType, defaults);
+    } else if (allTruncatedYears.length > 0) {
+      message.show(
+        `提示：${allTruncatedYears.join('、')}年 所请求的未来日期超出 Open-Meteo 预报上限（约 15 天），超出部分无数据、已按可获取范围部分显示。`,
+        'info',
       );
+      updateUrlFromState(lastQuery, state.tempType, defaults);
     } else {
       message.hide();
-      // 全部成功后更新 URL
       updateUrlFromState(lastQuery, state.tempType, defaults);
     }
   }
