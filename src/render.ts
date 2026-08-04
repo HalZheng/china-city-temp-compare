@@ -32,7 +32,7 @@ export interface RenderComponents {
   };
   dataTable: { update: (data: YearlyData[], labels: string[]) => void };
   statsCards: { update: (summaries: YearSummaryStats[], tempType: TempType, colors: Record<number, string>) => void };
-  extremeCards: { update: (heatwaves: HeatwavePeriod[], coldWaves: ColdWavePeriod[], colors: Record<number, string>) => void };
+  extremeCards: { update: (heatwaves: HeatwavePeriod[], coldWaves: ColdWavePeriod[], colors: Record<number, string>, tempType: TempType) => void };
 }
 
 export interface RenderDeps {
@@ -58,7 +58,7 @@ export function createRenderAll(deps: RenderDeps): (opts?: { skipTable?: boolean
       yearAverages,
     );
     components.statsCards.update(summaries, state.tempType, runtime.currentYearColors);
-    components.extremeCards.update(runtime.cachedHeatwaves, runtime.cachedColdWaves, runtime.currentYearColors);
+    components.extremeCards.update(runtime.cachedHeatwaves, runtime.cachedColdWaves, runtime.currentYearColors, state.tempType);
     if (!opts.skipTable) {
       components.dataTable.update(state.yearlyData, runtime.currentLabels);
     }

@@ -80,7 +80,8 @@ export interface ReverseGeocodeResult {
 
 export async function reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult> {
   const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh`;
-  const response = await fetch(url);
+  // 复用 fetchWithRetry：8s 超时 + 3 次指数退避重试，避免 BigDataCloud 偶发慢响应阻塞定位流程
+  const response = await fetchWithRetry(url);
   if (!response.ok) {
     throw new Error(`Reverse geocoding error: ${response.status}`);
   }

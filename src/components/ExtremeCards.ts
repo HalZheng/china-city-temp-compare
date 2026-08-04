@@ -1,4 +1,4 @@
-import type { ColdWavePeriod, HeatwavePeriod } from '../types';
+import type { ColdWavePeriod, HeatwavePeriod, TempType } from '../types';
 
 interface ExtremeCardsProps {
   container: HTMLElement;
@@ -7,16 +7,19 @@ interface ExtremeCardsProps {
 type AnyPeriod = HeatwavePeriod | ColdWavePeriod;
 
 export function ExtremeCards({ container }: ExtremeCardsProps): {
-  update: (heatwaves: HeatwavePeriod[], coldWaves: ColdWavePeriod[], colors: Record<number, string>) => void;
+  update: (heatwaves: HeatwavePeriod[], coldWaves: ColdWavePeriod[], colors: Record<number, string>, tempType: TempType) => void;
   clear: () => void;
 } {
   const wrapper = document.createElement('div');
   wrapper.className = 'extreme-section';
   container.appendChild(wrapper);
 
-  function update(heatwaves: HeatwavePeriod[], coldWaves: ColdWavePeriod[], colors: Record<number, string>) {
+  function update(heatwaves: HeatwavePeriod[], coldWaves: ColdWavePeriod[], colors: Record<number, string>, tempType: TempType) {
     wrapper.innerHTML = '';
-    renderGroup(wrapper, '高温热浪', heatwaves, colors, false);
+    // 按 tempType 分组显示：max tab 显示高温热浪+寒潮，min tab 只显示寒潮（与 StatsCards 分组逻辑一致）
+    if (tempType === 'max') {
+      renderGroup(wrapper, '高温热浪', heatwaves, colors, false);
+    }
     renderGroup(wrapper, '寒潮 / 严寒', coldWaves, colors, true);
   }
 

@@ -1,25 +1,7 @@
 import type { ColdWavePeriod, HeatwavePeriod, YearlyData } from '../types';
-
-/**
- * 中国国标量级阈值（常量集中，便于以后微调）。
- * - 高温日/高温热浪：日最高气温 ≥ 35℃，连续 ≥3 天为一次热浪；
- * - 热夜：日最低气温 ≥ 25℃；
- * - 寒潮：日最低气温 ≤ -5℃ 且 日最高气温 ≤ 0℃，连续 ≥3 天；其中日最低 ≤ -10℃ 标记为严寒；
- * - 冰冻日：日最低 ≤ 0℃；极端寒夜：日最低 ≤ -5℃。
- * 注：采用"绝对低温简化"判定（你已确认），不采用 GB/T 27957 的降温幅度法。
- */
-export const TH = {
-  HEAT_DAY_TMAX: 35,
-  HEATWAVE_TMAX: 35,
-  HEATWAVE_MIN_DAYS: 3,
-  TROPICAL_NIGHT_TMIN: 25,
-  COLDWAVE_TMIN: -5,
-  COLDWAVE_TMAX: 0,
-  COLDWAVE_MIN_DAYS: 3,
-  SEVERE_COLD_TMIN: -10,
-  FREEZING_TMIN: 0,
-  EXTREME_COLD_TMIN: -5,
-} as const;
+// TH 已移至 utils/helpers（工具层），此处 re-export 保持 extremes.test.ts 等已有 import 兼容
+import { TH } from '../utils/helpers';
+export { TH };
 
 interface DayInput {
   md: string;

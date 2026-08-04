@@ -153,11 +153,12 @@ export function TempChart({ container }: TempChartProps): {
     const isNarrow = window.matchMedia('(max-width: 768px)').matches && !fs;
     if (!isNarrow) {
       // 桌面/全屏横屏：移除 dataZoom，滚轮回归页面滚动
+      // as any：ECharts 6 的 setOption 第二参类型未导出 replaceMerge 字段，运行时支持
       chart.setOption({ dataZoom: [] }, { replaceMerge: ['dataZoom'] } as any);
       return;
     }
     const dzEnd = calcDataZoomEnd(latestLabels.length, getChartWidth());
-    const dataZoom: any[] = [
+    const dataZoom: DataZoomComponentOption[] = [
       { type: 'inside', start: 0, end: dzEnd, zoomOnMouseWheel: true, moveOnMouseMove: true },
       {
         type: 'slider', start: 0, end: dzEnd, height: 18, bottom: 8,
@@ -168,6 +169,7 @@ export function TempChart({ container }: TempChartProps): {
         textStyle: { color: getCssVar('--icon') || '#6b7280', fontSize: 11 },
       },
     ];
+    // as any：同上，replaceMerge 运行时支持但类型未导出
     chart.setOption({ dataZoom }, { replaceMerge: ['dataZoom'] } as any);
   }
 
