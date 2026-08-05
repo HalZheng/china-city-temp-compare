@@ -111,6 +111,8 @@ export interface QueryDeps {
     fallbackCity: City;
   };
   queryBtn: HTMLButtonElement;
+  /** 导出 CSV 按钮：查询成功后启用，失败/加载中禁用 */
+  exportCsvBtn: HTMLButtonElement;
   /** 各 section 元素，查询无数据时隐藏 */
   sections: {
     chart: HTMLElement;
@@ -128,7 +130,7 @@ export interface QueryHandlerInstance {
 }
 
 export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
-  const { state, skeleton, message, renderAll, runtime, defaults, queryBtn, sections } = deps;
+  const { state, skeleton, message, renderAll, runtime, defaults, queryBtn, exportCsvBtn, sections } = deps;
 
   // 失败年份缓存：handleQuery 写入，retryFailed 读取
   let failedYears: { year: number; error: string }[] = [];
@@ -262,6 +264,7 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
     state.loading = true;
     queryBtn.disabled = true;
     queryBtn.setAttribute('aria-busy', 'true');
+    exportCsvBtn.disabled = true;
     message.hide();
     skeleton.show();
 
@@ -282,6 +285,9 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
     activeQueryController = null;
 
     const { hasData, errors, truncatedYears, forecastErrorYears } = applyResults(results, query);
+
+    // 查询成功有数据时启用导出按钮
+    exportCsvBtn.disabled = !hasData;
 
     // 关键顺序：先调用所有 update() 把新内容渲染进仍 display:none 的内容容器，
     // 再 hideSkeletons() 一次性隐藏骨架 + 显示新内容 -> 避免旧内容闪现
@@ -320,6 +326,7 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
     state.loading = true;
     queryBtn.disabled = true;
     queryBtn.setAttribute('aria-busy', 'true');
+    exportCsvBtn.disabled = true;
     message.hide();
 
     const todayStr = formatDate(new Date());
@@ -351,6 +358,8 @@ export function createQueryHandler(deps: QueryDeps): QueryHandlerInstance {
       state.yearlyData = Array.from(merged.values()).sort((a, b) => a.year - b.year);
 
       updateRuntime(state.yearlyData, lastQuery);
+      // 仍有数据，启用导出按钮
+      exportCsvBtn.disabled = state.yearlyData.length === 0;
     }
 
     // 更新失败年份缓存

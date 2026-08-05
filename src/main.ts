@@ -8,6 +8,7 @@ import { DataTable } from './components/DataTable';
 import { StatsCards } from './components/StatsCards';
 import { ExtremeCards } from './components/ExtremeCards';
 import { getDefaultDateRange, getRecentYears } from './utils/helpers';
+import { buildYearlyCsv, downloadCsv } from './utils/csv';
 import { createThemeToggle } from './theme';
 import { createMessageBanner } from './message';
 import { createSkeletons } from './skeleton';
@@ -154,9 +155,19 @@ app.appendChild(extremeSection);
 // Table section
 const tableSection = document.createElement('section');
 tableSection.className = 'table-section';
+const tableHeader = document.createElement('div');
+tableHeader.className = 'table-section-header';
 const tableTitle = document.createElement('h2');
 tableTitle.textContent = '详细数据';
-tableSection.appendChild(tableTitle);
+const exportCsvBtn = document.createElement('button');
+exportCsvBtn.type = 'button';
+exportCsvBtn.className = 'export-csv-btn';
+exportCsvBtn.textContent = '导出 CSV';
+exportCsvBtn.disabled = true;
+exportCsvBtn.title = '将当前查询结果导出为 CSV 文件';
+tableHeader.appendChild(tableTitle);
+tableHeader.appendChild(exportCsvBtn);
+tableSection.appendChild(tableHeader);
 tableSection.appendChild(skeleton.tableSkeleton);
 tableSection.appendChild(skeleton.tableContent);
 app.appendChild(tableSection);
@@ -209,6 +220,7 @@ const queryHandler = createQueryHandler({
     fallbackCity: FALLBACK_CITY,
   },
   queryBtn,
+  exportCsvBtn,
   sections: { chart: chartSection, stats: statsSection, extreme: extremeSection, table: tableSection },
 });
 handleQuery = queryHandler.handleQuery;
@@ -216,6 +228,18 @@ handleQuery = queryHandler.handleQuery;
 maxTab.addEventListener('click', () => setTempType('max'));
 minTab.addEventListener('click', () => setTempType('min'));
 queryBtn.addEventListener('click', () => void handleQuery());
+
+// 导出 CSV：仅在查询成功后可用（renderAll 执行后 enable）
+exportCsvBtn.addEventListener('click', () => {
+  if (state.yearlyData.length === 0 || runtime.currentLabels.length === 0) return;
+  const { filename, content } = buildYearlyCsv(
+    state.yearlyData,
+    runtime.currentLabels,
+    runtime.currentCityName,
+    `${state.startMonthDay}_${state.endMonthDay}`,
+  );
+  downloadCsv(filename, content);
+});
 
 // ===== URL 路由 + 定位 + 初始查询 =====
 const urlResult = await applyUrlParams({
