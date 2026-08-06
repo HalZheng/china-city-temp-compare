@@ -1013,6 +1013,15 @@ body {
 /* ===== flatpickr 日历夜间模式适配 =====
    flatpickr 默认浅色，通过覆盖其内部 CSS 类适配夜间模式。
    选择器同时覆盖 [data-theme="dark"] 和系统偏好（无手动 light 时）。 */
+
+/* 隐藏日历头部的年份输入框及上下箭头：
+   参考年 2000 仅为内部计算用（保证 02-29 可选），不应展示给用户。
+   配合 minDate/maxDate 锁定 2000 年，年份信息对用户完全不可见。 */
+.flatpickr-current-month .numInputWrapper,
+.flatpickr-current-month .cur-year {
+  display: none !important;
+}
+
 .flatpickr-calendar,
 [data-theme="dark"] .flatpickr-calendar,
 :root:not([data-theme="light"]) .flatpickr-calendar {

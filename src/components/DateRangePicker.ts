@@ -100,6 +100,9 @@ export function DateRangePicker({ onChange }: DateRangePickerProps): DateRangePi
       locale: Mandarin,
       dateFormat: 'm-d',
       defaultDate: monthDayToDate(defaultDate),
+      // 锁定在参考闰年 2000 内：防止翻月/翻年越界导致 02-29 消失
+      minDate: `${REFERENCE_YEAR}-01-01`,
+      maxDate: `${REFERENCE_YEAR}-12-31`,
       allowInput: false,
       clickOpens: true,
       static: false,
